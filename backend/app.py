@@ -14,6 +14,10 @@ import firebase_admin
 from firebase_admin import auth, firestore
 import openai
 
+@app.route("/")
+def index():
+    return "Zentrafuge v9 backend is live."
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
