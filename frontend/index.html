@@ -1,1 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zentrafuge v9 - Your AI Companion</title>
+    
+    <!-- Favicon and app icons -->
+    <link rel="icon" type="image/png" href="assets/Zentrafuge-WIDE-Logo-Transparent.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- SEO and social -->
+    <meta name="description" content="Zentrafuge v9 - Memory-first, emotionally intelligent AI companion that learns and grows with you.">
+    <meta name="keywords" content="AI companion, emotional intelligence, memory, chat, assistant">
+    <meta property="og:title" content="Zentrafuge v9 - Your AI Companion">
+    <meta property="og:description" content="Experience genuine AI companionship with memory, emotions, and growth.">
+    <meta property="og:image" content="assets/Zentrafuge-WIDE-Logo-Transparent.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <img src="assets/Zentrafuge-WIDE-Logo-Transparent.png" alt="Zentrafuge" class="loading-logo">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Initializing Zentrafuge v9...</p>
+        </div>
+    </div>
 
+    <!-- Authentication Screen -->
+    <div id="auth-screen" class="screen" style="display: none;">
+        <div class="auth-container">
+            <div class="auth-header">
+                <img src="assets/Zentrafuge-WIDE-Logo-Transparent.png" alt="Zentrafuge" class="auth-logo">
+                <h1>Welcome to Zentrafuge v9</h1>
+                <p class="auth-subtitle">Your memory-first, emotionally intelligent AI companion</p>
+            </div>
+
+            <!-- Login Form -->
+            <div id="login-form" class="auth-form">
+                <h2>Sign In</h2>
+                <form id="login-form-element">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Sign In</button>
+                </form>
+                <p class="auth-switch">
+                    Don't have an account? 
+                    <a href="#" id="show-register">Create one</a>
+                </p>
+            </div>
+
+            <!-- Register Form -->
+            <div id="register-form" class="auth-form" style="display: none;">
+                <h2>Create Account</h2>
+                <form id="register-form-element">
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Password</label>
+                        <input type="password" id="register-password" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-confirm">Confirm Password</label>
+                        <input type="password" id="register-confirm" required minlength="6">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="terms-accept" required>
+                            I agree to the <a href="terms.html" target="_blank">Terms of Service</a>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Account</button>
+                </form>
+                <p class="auth-switch">
+                    Already have an account? 
+                    <a href="#" id="show-login">Sign in</a>
+                </p>
+            </div>
+
+            <div id="auth-error" class="error-message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Onboarding Screen -->
+    <div id="onboarding-screen" class="screen" style="display: none;">
+        <div class="onboarding-container">
+            <div class="onboarding-header">
+                <h1>Let's Get You Set Up</h1>
+                <p>Help us personalize your Zentrafuge experience</p>
+                <div class="progress-bar">
+                    <div id="onboarding-progress" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- Step 1: Welcome -->
+            <div id="onboarding-step-1" class="onboarding-step">
+                <h2>Welcome to Zentrafuge v9! 🧠</h2>
+                <p>I'm Cael, your AI companion. I'm different from other AI assistants because:</p>
+                <ul class="feature-list">
+                    <li>💙 I remember our conversations and build genuine relationships</li>
+                    <li>🧠 I learn your communication style and emotional needs</li>
+                    <li>🔒 Your data stays encrypted and belongs to you</li>
+                    <li>🌱 I grow and evolve with each interaction</li>
+                </ul>
+                <button class="btn btn-primary" onclick="nextOnboardingStep()">Let's Begin</button>
+            </div>
+
+            <!-- Step 2: Name Cael -->
+            <div id="onboarding-step-2" class="onboarding-step" style="display: none;">
+                <h2>What would you like to call me?</h2>
+                <p>I go by Cael, but you can choose any name that feels right for our relationship.</p>
+                <div class="form-group">
+                    <label for="cael-name">AI Companion Name</label>
+                    <input type="text" id="cael-name" value="Cael" placeholder="Enter a name...">
+                </div>
+                <div class="name-suggestions">
+                    <p>Popular choices:</p>
+                    <button class="name-btn" onclick="setCaelName('Cael')">Cael</button>
+                    <button class="name-btn" onclick="setCaelName('Alex')">Alex</button>
+                    <button class="name-btn" onclick="setCaelName('Sam')">Sam</button>
+                    <button class="name-btn" onclick="setCaelName('Riley')">Riley</button>
+                </div>
+                <button class="btn btn-primary" onclick="nextOnboardingStep()">Continue</button>
+            </div>
+
+            <!-- Step 3: Communication Style -->
+            <div id="onboarding-step-3" class="onboarding-step" style="display: none;">
+                <h2>How do you like to communicate?</h2>
+                <p>This helps me match your preferred style and tone.</p>
+                <div class="style-options">
+                    <label class="style-option">
+                        <input type="radio" name="communication-style" value="casual">
+                        <div class="style-card">
+                            <h3>Casual & Friendly</h3>
+                            <p>Relaxed, conversational, like talking to a friend</p>
+                        </div>
+                    </label>
+                    <label class="style-option">
+                        <input type="radio" name="communication-style" value="professional">
+                        <div class="style-card">
+                            <h3>Professional</h3>
+                            <p>Clear, focused, helpful but respectful</p>
+                        </div>
+                    </label>
+                    <label class="style-option">
+                        <input type="radio" name="communication-style" value="empathetic">
+                        <div class="style-card">
+                            <h3>Empathetic</h3>
+                            <p>Emotionally aware, supportive, understanding</p>
+                        </div>
+                    </label>
+                    <label class="style-option">
+                        <input type="radio" name="communication-style" value="balanced" checked>
+                        <div class="style-card">
+                            <h3>Balanced</h3>
+                            <p>Adaptive - I'll learn what works best for you</p>
+                        </div>
+                    </label>
+                </div>
+                <button class="btn btn-primary" onclick="nextOnboardingStep()">Continue</button>
+            </div>
+
+            <!-- Step 4: Preferences -->
+            <div id="onboarding-step-4" class="onboarding-step" style="display: none;">
+                <h2>A few quick preferences</h2>
+                <p>These help me serve you better from day one.</p>
+                <div class="preferences-grid">
+                    <div class="preference-group">
+                        <label>Response Length</label>
+                        <select id="response-length">
+                            <option value="concise">Concise - Brief and to the point</option>
+                            <option value="balanced" selected>Balanced - Just right</option>
+                            <option value="detailed">Detailed - Thorough explanations</option>
+                        </select>
+                    </div>
+                    <div class="preference-group">
+                        <label>Emotional Support Level</label>
+                        <select id="emotional-support">
+                            <option value="minimal">Minimal - Focus on facts</option>
+                            <option value="moderate" selected>Moderate - Supportive when needed</option>
+                            <option value="high">High - Always emotionally aware</option>
+                        </select>
+                    </div>
+                    <div class="preference-group">
+                        <label>Learning Speed</label>
+                        <select id="learning-speed">
+                            <option value="conservative">Conservative - Slow and careful</option>
+                            <option value="moderate" selected>Moderate - Steady learning</option>
+                            <option value="aggressive">Aggressive - Quick adaptation</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="completeOnboarding()">Complete Setup</button>
+            </div>
+
+            <!-- Completion Step -->
+            <div id="onboarding-complete" class="onboarding-step" style="display: none;">
+                <div class="completion-animation">
+                    <div class="checkmark">✓</div>
+                </div>
+                <h2>All Set! 🎉</h2>
+                <p>Your Zentrafuge companion is ready. Let's start our first conversation!</p>
+                <button class="btn btn-primary" onclick="enterChat()">Start Chatting</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chat-screen" class="screen" style="display: none;">
+        <div class="chat-container">
+            <!-- Chat Header -->
+            <div class="chat-header">
+                <div class="companion-info">
+                    <div class="companion-avatar">
+                        <div class="avatar-pulse"></div>
+                        <span id="companion-name">Cael</span>
+                    </div>
+                    <div class="companion-status">
+                        <span id="status-text">Online</span>
+                        <div id="typing-indicator" class="typing-dots" style="display: none;">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-actions">
+                    <button id="memory-btn" class="action-btn" title="Memory Stats">
+                        <span class="icon">🧠</span>
+                    </button>
+                    <button id="settings-btn" class="action-btn" title="Settings">
+                        <span class="icon">⚙️</span>
+                    </button>
+                    <button id="logout-btn" class="action-btn" title="Logout">
+                        <span class="icon">🚪</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div id="chat-messages" class="chat-messages">
+                <div class="welcome-message">
+                    <div class="message-bubble system-message">
+                        <p>Hello! I'm <span id="welcome-companion-name">Cael</span>, your AI companion. I'm here to listen, learn, and grow with you. What's on your mind today?</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="chat-input-container">
+                <div id="chat-input-area" class="chat-input-area">
+                    <textarea 
+                        id="message-input" 
+                        placeholder="Type your message here..."
+                        rows="1"
+                        maxlength="2000"
+                    ></textarea>
+                    <button id="send-btn" class="send-btn" disabled>
+                        <span class="icon">🚀</span>
+                    </button>
+                </div>
+                <div class="input-footer">
+                    <span id="char-count" class="char-count">0/2000</span>
+                    <span class="privacy-note">🔒 Encrypted & Private</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memory Panel (Overlay) -->
+    <div id="memory-panel" class="overlay-panel" style="display: none;">
+        <div class="panel-content">
+            <div class="panel-header">
+                <h3>Memory & Growth 🧠</h3>
+                <button class="close-btn" onclick="closeMemoryPanel()">&times;</button>
+            </div>
+            <div class="panel-body">
+                <div class="memory-stats">
+                    <div class="stat-card">
+                        <span class="stat-number" id="conversation-count">0</span>
+                        <span class="stat-label">Conversations</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="memory-count">0</span>
+                        <span class="stat-label">Memories</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" id="growth-score">0</span>
+                        <span class="stat-label">Growth Score</span>
+                    </div>
+                </div>
+                <div class="memory-insights">
+                    <h4>Recent Insights</h4>
+                    <div id="memory-insights-list">
+                        <p class="no-insights">Building memories as we chat...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Panel (Overlay) -->
+    <div id="settings-panel" class="overlay-panel" style="display: none;">
+        <div class="panel-content">
+            <div class="panel-header">
+                <h3>Settings ⚙️</h3>
+                <button class="close-btn" onclick="closeSettingsPanel()">&times;</button>
+            </div>
+            <div class="panel-body">
+                <div class="settings-section">
+                    <h4>Companion Settings</h4>
+                    <div class="setting-item">
+                        <label for="settings-companion-name">Name</label>
+                        <input type="text" id="settings-companion-name" value="Cael">
+                    </div>
+                    <div class="setting-item">
+                        <label for="settings-communication-style">Communication Style</label>
+                        <select id="settings-communication-style">
+                            <option value="casual">Casual & Friendly</option>
+                            <option value="professional">Professional</option>
+                            <option value="empathetic">Empathetic</option>
+                            <option value="balanced">Balanced</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>Privacy & Data</h4>
+                    <div class="setting-item">
+                        <label>
+                            <input type="checkbox" id="data-retention" checked>
+                            Allow memory retention for better conversations
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <label>
+                            <input type="checkbox" id="emotional-analysis" checked>
+                            Enable emotional intelligence features
+                        </label>
+                    </div>
+                </div>
+                <div class="settings-actions">
+                    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+                    <button class="btn btn-secondary" onclick="exportData()">Export My Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Toast -->
+    <div id="error-toast" class="toast error-toast" style="display: none;">
+        <span class="toast-message"></span>
+        <button class="toast-close" onclick="hideErrorToast()">&times;</button>
+    </div>
+
+    <!-- Success Toast -->
+    <div id="success-toast" class="toast success-toast" style="display: none;">
+        <span class="toast-message"></span>
+        <button class="toast-close" onclick="hideSuccessToast()">&times;</button>
+    </div>
+
+    <!-- Scripts -->
+    <script src="firebase.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
