@@ -25,7 +25,7 @@
                 <h1>Welcome to Zentrafuge</h1>
                 <p class="subtitle">Let's set up your AI companion</p>
                 <div class="progress-bar">
-                    <div class="progress-fill" style="width: 20%;"></div>
+                    <div class="progress-fill" style="width: 16.67%;"></div>
                 </div>
             </div>
 
@@ -77,7 +77,77 @@
                 </div>
             </div>
 
-            <!-- Step 2: Communication Style -->
+            <!-- Step 2: Veteran Status -->
+            <div id="onboarding-step-veteran" class="onboarding-step" style="display: none;">
+                <h2>🎖️ Military Service</h2>
+                <p>Thank you for your service. We're honored to support veterans with specialized understanding of military culture and experience.</p>
+                
+                <div class="veteran-verification-section">
+                    <div class="form-group">
+                        <label>Are you a veteran?</label>
+                        <input type="checkbox" id="veteran" name="is_veteran">
+                    </div>
+
+                    <div id="veteran-details" style="display: none;">
+                        <div class="form-group">
+                            <label>Branch of Service</label>
+                            <select id="service_branch">
+                                <option value="">Select your branch</option>
+                                <option value="army">Army</option>
+                                <option value="navy">Navy</option>
+                                <option value="marines">Marines</option>
+                                <option value="air_force">Air Force</option>
+                                <option value="coast_guard">Coast Guard</option>
+                                <option value="space_force">Space Force</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Country of Service</label>
+                            <select id="service_country">
+                                <option value="US">United States</option>
+                                <option value="UK">United Kingdom</option>
+                                <option value="CA">Canada</option>
+                                <option value="AU">Australia</option>
+                                <option value="NZ">New Zealand</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="service_years">Years of Service (Optional)</label>
+                            <input type="text" id="service_years" placeholder="e.g., 2001-2008">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="unit_served">Unit/Regiment (Optional)</label>
+                            <input type="text" id="unit_served" placeholder="e.g., 82nd Airborne, Royal Marines">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="deployments">Deployments/Operations (Optional)</label>
+                            <input type="text" id="deployments" placeholder="e.g., Iraq, Afghanistan, Bosnia">
+                        </div>
+                        
+                        <div class="veteran-benefits-note">
+                            <h4>🛡️ Veteran Benefits in Zentrafuge</h4>
+                            <ul>
+                                <li>Military culture understanding & terminology</li>
+                                <li>Unit history and tradition recognition</li>
+                                <li>Deployment experience acknowledgment</li>
+                                <li>Veteran-specific mental health resources</li>
+                                <li>Free premium features for verified veterans</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary onboarding-prev">Back</button>
+                    <button type="button" class="btn btn-primary onboarding-next">Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Communication Style -->
             <div id="onboarding-step-2" class="onboarding-step" style="display: none;">
                 <h2>💬 Communication Preferences</h2>
                 <p>How do you prefer to communicate? This helps your companion match your style.</p>
@@ -122,7 +192,7 @@
                 </div>
             </div>
 
-            <!-- Step 3: Emotional Support Preferences -->
+            <!-- Step 4: Emotional Support Preferences -->
             <div id="onboarding-step-3" class="onboarding-step" style="display: none;">
                 <h2>🌱 Emotional Support Style</h2>
                 <p>How do you process emotions and receive support?</p>
@@ -167,7 +237,7 @@
                 </div>
             </div>
 
-            <!-- Step 4: Life Context -->
+            <!-- Step 5: Life Context -->
             <div id="onboarding-step-4" class="onboarding-step" style="display: none;">
                 <h2>🎯 Tell Us About Your Journey</h2>
                 <p>Share what's meaningful to you right now. This helps your companion understand your context.</p>
@@ -210,7 +280,7 @@
                 </div>
             </div>
 
-            <!-- Step 5: Completion -->
+            <!-- Step 6: Completion -->
             <div id="onboarding-step-5" class="onboarding-step" style="display: none;">
                 <div class="completion-animation">
                     <div class="checkmark">✓</div>
@@ -246,7 +316,74 @@
                     window.location.href = '../index.html';
                 }
             });
+
+            // Toggle veteran details visibility
+            const veteranCheckbox = document.getElementById('veteran');
+            const veteranDetails = document.getElementById('veteran-details');
+            if (veteranCheckbox) {
+                veteranCheckbox.addEventListener('change', () => {
+                    veteranDetails.style.display = veteranCheckbox.checked ? 'block' : 'none';
+                });
+            }
         });
+
+        // Enhanced onboarding completion function
+        async function completeVeteranOnboarding() {
+            const onboardingData = {
+                ai_name: document.getElementById('ai_name')?.value || 'Cael',
+                communication_style: document.querySelector('input[name="communication_style"]:checked')?.value || 'balanced',
+                emotional_pacing: document.querySelector('input[name="emotional_pacing"]:checked')?.value || 'varies_situation',
+                life_chapter: document.getElementById('life_chapter')?.value || '',
+                sources_of_meaning: Array.from(document.querySelectorAll('input[name="sources_of_meaning"]:checked')).map(input => input.value),
+                effective_support: Array.from(document.querySelectorAll('input[name="effective_support"]:checked')).map(input => input.value),
+                veteran_profile: {
+                    is_veteran: document.getElementById('veteran')?.checked || false,
+                    service_branch: document.getElementById('service_branch')?.value || null,
+                    service_country: document.getElementById('service_country')?.value || 'US',
+                    service_years: document.getElementById('service_years')?.value || null,
+                    unit_served: document.getElementById('unit_served')?.value || null,
+                    deployments: document.getElementById('deployments')?.value || null,
+                    verification_status: 'pending' // Will be verified by backend
+                }
+            };
+            
+            // Show loading state
+            document.getElementById('onboarding-loading').classList.remove('hidden');
+            document.getElementById('onboarding-step-4').style.display = 'none';
+            
+            try {
+                // Send to backend for processing and verification
+                const token = await firebase.auth().currentUser.getIdToken();
+                const response = await fetch(`${Config.API_BASE}/user/onboarding`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(onboardingData)
+                });
+                
+                if (response.ok) {
+                    const responseData = await response.json();
+                    
+                    // If veteran verification is approved, initialize veteran system
+                    if (responseData.veteran_verified) {
+                        const veteranSystem = await initializeVeteranSystem();
+                        await veteranSystem.verifyVeteranStatus(firebase.auth().currentUser.uid, token);
+                    }
+                    
+                    // Continue to completion step
+                    showOnboardingStep(5);
+                } else {
+                    throw new Error('Failed to complete onboarding');
+                }
+            } catch (error) {
+                console.error('Onboarding error:', error);
+                document.getElementById('onboarding-message').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+                document.getElementById('onboarding-loading').classList.add('hidden');
+                document.getElementById('onboarding-step-4').style.display = 'block';
+            }
+        }
     </script>
 </body>
 </html>
