@@ -1,4 +1,4 @@
-// js/chat.js - Chat functionality
+// js/chat.js - Chat functionality (Updated for your Firebase setup)
 
 import Config from './config.js';
 import { sendChatMessage } from './api.js';
@@ -37,12 +37,21 @@ async function checkAuthentication() {
     try {
         await waitForFirebase();
         
+        // Use your global firebase auth
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
                 currentUser = user;
                 document.getElementById('user-name').textContent = user.displayName || user.email;
+                
+                // Log user info for debugging
+                console.log('👤 Chat user:', {
+                    email: user.email,
+                    verified: user.emailVerified,
+                    name: user.displayName
+                });
             } else {
                 // Redirect to login if not authenticated
+                console.log('❌ No authenticated user, redirecting to login');
                 window.location.href = '../index.html';
             }
         });
