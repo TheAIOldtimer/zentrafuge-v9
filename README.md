@@ -1,10 +1,15 @@
 # zentrafuge-v9
 Version 9: server repository for the zentrafuge mental health app.
 
-## 🔐 Required Secrets (Do Not Commit These)
+## 🔐 Backend Environment Requirements (Secrets Not Included)
 
-The backend requires:
+To run the backend (`Flask 2.3.2`):
 
-- `serviceAccountKey.json`: Firebase Admin SDK service account file  
-- `FIREBASE_PROJECT_ID`: e.g. zentrafuge-v9  
-- `GOOGLE_APPLICATION_CREDENTIALS`: relative path to the above file  
+### Required Files
+- `serviceAccountKey.json`: Firebase Admin SDK key (not committed)
+  - Stored locally at: `backend/serviceAccountKey.json`
+  - On Render: upload via “Secret Files” as `/etc/secrets/serviceAccountKey.json`
+
+### Required Env Vars
+- `FIREBASE_PROJECT_ID=zentrafuge-v9`
+- `GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/serviceAccountKey.json`
