@@ -20,7 +20,7 @@ const Config = {
     // Update this to your backend URL - for local development:
     // API_BASE: 'http://localhost:5000'
     // For production, use your Render URL:
-    API_BASE: 'https://your-render-app.onrender.com', // Replace with your actual Render URL
+    API_BASE: 'https://zentrafuge-v9.onrender.com', // Replace with your actual Render URL
     MESSAGE_MAX_LENGTH: 2000,
     TYPING_DELAY: 1000,
     ERROR_DISPLAY_TIME: 5000,
