@@ -1158,25 +1158,162 @@ body {
     }
 }
 
-/* Print styles */
-@media print {
-    .chat-container {
-        box-shadow: none;
-        max-width: none;
+/* Registration Page Specific Styles */
+.register-btn {
+    position: relative;
+    min-height: 48px;
+}
+
+.btn-loading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.btn-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.checkbox-label input[type="checkbox"] {
+    display: none;
+}
+
+.checkmark {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-fast);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.checkbox-label input[type="checkbox"]:checked + .checkmark {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.checkbox-label input[type="checkbox"]:checked + .checkmark::after {
+    content: '✓';
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.checkbox-label.required {
+    margin-bottom: var(--space-md);
+}
+
+.password-hint {
+    font-size: 0.8rem;
+    margin-top: var(--space-xs);
+    transition: color var(--transition-fast);
+}
+
+.password-hint.weak {
+    color: var(--error-color);
+}
+
+.password-hint.medium {
+    color: var(--warning-color);
+}
+
+.password-hint.strong {
+    color: var(--success-color);
+}
+
+.veteran-note {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: var(--space-xs);
+}
+
+.success-container {
+    text-align: center;
+    padding: var(--space-2xl);
+}
+
+.success-animation {
+    margin-bottom: var(--space-2xl);
+}
+
+.checkmark-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--success-color);
+    margin: 0 auto var(--space-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: bounceIn 0.6s ease-out;
+}
+
+.checkmark-circle .checkmark {
+    color: white;
+    font-size: 2rem;
+    font-weight: bold;
+    border: none;
+    background: none;
+    width: auto;
+    height: auto;
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-xl);
+    z-index: 100;
+}
+
+.switch-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+    transition: var(--transition-fast);
+}
+
+.switch-link:hover {
+    text-decoration: underline;
+}
+
+/* Small screen adjustments for registration */
+@media (max-width: 480px) {
+    .checkbox-label {
+        font-size: 0.85rem;
     }
     
-    .chat-header,
-    .chat-input-container {
-        display: none;
+    .checkmark {
+        width: 16px;
+        height: 16px;
     }
     
-    .message-bubble {
-        max-width: 100%;
-        box-shadow: none;
-        border: 1px solid #ccc;
-    }
-    
-    .overlay-panel {
-        display: none;
+    .success-container {
+        padding: var(--space-lg);
     }
 }
