@@ -177,4 +177,13 @@ def chat():
     })
 
     try:
-        response = openai_client.chat.comp_
+        response = openai_client.chat.comp_response = openai_client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "You are Cael, an emotionally intelligent AI companion."},
+        {"role": "user", "content": message}
+    ],
+    max_tokens=500,
+    temperature=0.7
+)
+
