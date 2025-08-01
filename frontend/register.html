@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Zentrafuge v9</title>
+    
+    <!-- Favicon and app icons -->
+    <link rel="icon" type="image/png" href="assets/Zentrafuge-WIDE-Logo-Transparent.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- SEO and social -->
+    <meta name="description" content="Create your Zentrafuge v9 account - Memory-first, emotionally intelligent AI companion.">
+    <meta name="keywords" content="AI companion, registration, emotional intelligence, memory, chat">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+</head>
+<body>
+    <!-- Registration Screen -->
+    <div class="screen" id="register-screen">
+        <div class="auth-container">
+            <div class="auth-header">
+                <img src="assets/Zentrafuge-WIDE-Logo-Transparent.png" alt="Zentrafuge" class="auth-logo">
+                <h1>Create Your Account</h1>
+                <p class="auth-subtitle">Join the future of AI companionship</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="loading-overlay" style="display: none;">
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <p class="loading-text">Creating your account...</p>
+                </div>
+            </div>
+
+            <!-- Registration Form -->
+            <div id="registration-form" class="auth-form">
+                <h2>Get Started</h2>
+                <form id="register-form-element">
+                    <div class="form-group">
+                        <label for="register-name">Full Name</label>
+                        <input type="text" id="register-name" required placeholder="Enter your full name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="register-email">Email Address</label>
+                        <input type="email" id="register-email" required placeholder="Enter your email">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="register-password">Password</label>
+                        <input type="password" id="register-password" required minlength="6" placeholder="Create a password (6+ characters)">
+                        <small class="password-hint">Use at least 6 characters with a mix of letters and numbers</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="register-confirm">Confirm Password</label>
+                        <input type="password" id="register-confirm" required minlength="6" placeholder="Confirm your password">
+                    </div>
+
+                    <!-- Veteran Status (Optional) -->
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="veteran-status">
+                            <span class="checkmark"></span>
+                            I am a military veteran (optional)
+                        </label>
+                        <small class="veteran-note">Veterans get priority access to new features</small>
+                    </div>
+
+                    <!-- Terms and Conditions -->
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label required">
+                            <input type="checkbox" id="terms-accept" required>
+                            <span class="checkmark"></span>
+                            I agree to the <a href="terms.html" target="_blank">Terms of Service</a> and <a href="#" target="_blank">Privacy Policy</a>
+                        </label>
+                    </div>
+
+                    <!-- Marketing Opt-in -->
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="marketing-opt-in" checked>
+                            <span class="checkmark"></span>
+                            Send me updates about new features and AI sovereignty news
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary register-btn">
+                        <span class="btn-text">Create Account</span>
+                        <span class="btn-loading" style="display: none;">
+                            <div class="btn-spinner"></div>
+                            Creating...
+                        </span>
+                    </button>
+                </form>
+
+                <div class="auth-switch">
+                    Already have an account? 
+                    <a href="index.html" class="switch-link">Sign in here</a>
+                </div>
+            </div>
+
+            <!-- Success State -->
+            <div id="success-state" class="success-container" style="display: none;">
+                <div class="success-animation">
+                    <div class="checkmark-circle">
+                        <div class="checkmark">✓</div>
+                    </div>
+                </div>
+                <h2>Welcome to Zentrafuge! 🎉</h2>
+                <p>Your account has been created successfully. Let's set up your AI companion.</p>
+                <button class="btn btn-primary" onclick="proceedToOnboarding()">
+                    Continue to Setup
+                </button>
+            </div>
+
+            <!-- Error Display -->
+            <div id="error-display" class="error-message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="firebase.js"></script>
+    <script>
+        // Registration Configuration
+        const RegistrationConfig = {
+            API_BASE: 'https://zentrafuge-v9.onrender.com',
+            MIN_PASSWORD_LENGTH: 6,
+            REDIRECT_DELAY: 2000
+        };
+
+        // DOM Elements
+        const elements = {
+            form: document.getElementById('register-form-element'),
+            loadingState: document.getElementById('loading-state'),
+            successState: document.getElementById('success-state'),
+            registrationForm: document.getElementById('registration-form'),
+            errorDisplay: document.getElementById('error-display'),
+            btnText: document.querySelector('.btn-text'),
+            btnLoading: document.querySelector('.btn-loading')
+        };
+
+        // Registration Handler
+        async function handleRegistration(event) {
+            event.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('register-name').value.trim(),
+                email: document.getElementById('register-email').value.trim(),
+                password: document.getElementById('register-password').value,
+                confirmPassword: document.getElementById('register-confirm').value,
+                isVeteran: document.getElementById('veteran-status').checked,
+                termsAccepted: document.getElementById('terms-accept').checked,
+                marketingOptIn: document.getElementById('marketing-opt-in').checked
+            };
+
+            // Validation
+            if (!validateForm(formData)) {
+                return;
+            }
+
+            try {
+                showLoading(true);
+                clearError();
+
+                // Create Firebase user
+                const userCredential = await firebase.auth().createUserWithEmailAndPassword(
+                    formData.email, 
+                    formData.password
+                );
+
+                // Update user profile with name
+                await userCredential.user.updateProfile({
+                    displayName: formData.name
+                });
+
+                // Get auth token
+                const authToken = await userCredential.user.getIdToken();
+
+                // Create user profile in backend
+                await createUserProfile(authToken, formData);
+
+                // Show success
+                showSuccess();
+
+            } catch (error) {
+                console.error('Registration error:', error);
+                showError(getErrorMessage(error));
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function validateForm(data) {
+            // Check required fields
+            if (!data.name || !data.email || !data.password) {
+                showError('Please fill in all required fields');
+                return false;
+            }
+
+            // Check password length
+            if (data.password.length < RegistrationConfig.MIN_PASSWORD_LENGTH) {
+                showError('Password must be at least 6 characters long');
+                return false;
+            }
+
+            // Check password match
+            if (data.password !== data.confirmPassword) {
+                showError('Passwords do not match');
+                return false;
+            }
+
+            // Check terms acceptance
+            if (!data.termsAccepted) {
+                showError('Please accept the Terms of Service');
+                return false;
+            }
+
+            return true;
+        }
+
+        async function createUserProfile(authToken, formData) {
+            const response = await fetch(`${RegistrationConfig.API_BASE}/user/profile`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: formData.name,
+                    email: formData.email,
+                    is_veteran: formData.isVeteran,
+                    marketing_opt_in: formData.marketingOptIn,
+                    registration_date: new Date().toISOString()
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to create user profile');
+            }
+
+            return response.json();
+        }
+
+        function showLoading(show) {
+            if (show) {
+                elements.btnText.style.display = 'none';
+                elements.btnLoading.style.display = 'flex';
+                elements.loadingState.style.display = 'flex';
+            } else {
+                elements.btnText.style.display = 'block';
+                elements.btnLoading.style.display = 'none';
+                elements.loadingState.style.display = 'none';
+            }
+        }
+
+        function showSuccess() {
+            elements.registrationForm.style.display = 'none';
+            elements.successState.style.display = 'block';
+        }
+
+        function showError(message) {
+            elements.errorDisplay.textContent = message;
+            elements.errorDisplay.style.display = 'block';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                elements.errorDisplay.style.display = 'none';
+            }, 5000);
+        }
+
+        function clearError() {
+            elements.errorDisplay.style.display = 'none';
+        }
+
+        function getErrorMessage(error) {
+            const errorMessages = {
+                'auth/email-already-in-use': 'An account with this email already exists',
+                'auth/weak-password': 'Password is too weak. Please use at least 6 characters',
+                'auth/invalid-email': 'Please enter a valid email address',
+                'auth/operation-not-allowed': 'Email registration is currently disabled',
+                'auth/too-many-requests': 'Too many attempts. Please try again later'
+            };
+
+            return errorMessages[error.code] || error.message || 'Registration failed. Please try again.';
+        }
+
+        function proceedToOnboarding() {
+            window.location.href = 'index.html';
+        }
+
+        // Real-time password validation
+        function setupPasswordValidation() {
+            const passwordInput = document.getElementById('register-password');
+            const confirmInput = document.getElementById('register-confirm');
+
+            passwordInput.addEventListener('input', validatePasswordStrength);
+            confirmInput.addEventListener('input', validatePasswordMatch);
+        }
+
+        function validatePasswordStrength() {
+            const password = document.getElementById('register-password').value;
+            const hint = document.querySelector('.password-hint');
+            
+            if (password.length === 0) {
+                hint.textContent = 'Use at least 6 characters with a mix of letters and numbers';
+                hint.className = 'password-hint';
+            } else if (password.length < 6) {
+                hint.textContent = 'Password too short - need at least 6 characters';
+                hint.className = 'password-hint weak';
+            } else if (password.length >= 6 && /[A-Za-z]/.test(password) && /[0-9]/.test(password)) {
+                hint.textContent = 'Strong password! ✓';
+                hint.className = 'password-hint strong';
+            } else {
+                hint.textContent = 'Good - try adding numbers for extra security';
+                hint.className = 'password-hint medium';
+            }
+        }
+
+        function validatePasswordMatch() {
+            const password = document.getElementById('register-password').value;
+            const confirm = document.getElementById('register-confirm').value;
+            const confirmInput = document.getElementById('register-confirm');
+            
+            if (confirm.length === 0) {
+                confirmInput.style.borderColor = '';
+                return;
+            }
+            
+            if (password === confirm) {
+                confirmInput.style.borderColor = '#10b981';
+            } else {
+                confirmInput.style.borderColor = '#ef4444';
+            }
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            elements.form.addEventListener('submit', handleRegistration);
+            setupPasswordValidation();
+            
+            console.log('🚀 Zentrafuge v9 Registration Ready');
+        });
+
+        // Initialize when Firebase is ready
+        firebase.auth().onAuthStateChanged(function(user) {
+            if (user) {
+                console.log('User already signed in, redirecting...');
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>
