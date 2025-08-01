@@ -1,5 +1,5 @@
 const Config = {
-  API_BASE: 'http://localhost:5000',
+  API_BASE: 'https://zentrafuge-v9.onrender.com',
   FIREBASE_TIMEOUT: 10000,
   REDIRECT_DELAY: 2000,
   
