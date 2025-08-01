@@ -150,9 +150,9 @@ def verify_auth():
         return jsonify({'error': 'Authentication failed'}), 500
 
 # User profile endpoints
-@app.route('/user/profile', methods=['GET'])
-def get_user_profile():
-    """Get user profile and onboarding state"""
+@app.route('/user/profile', methods=['GET', 'POST'])
+def handle_user_profile():
+    """Get or create user profile"""
     try:
         # Get auth token from header
         auth_header = request.headers.get('Authorization')
@@ -166,31 +166,62 @@ def get_user_profile():
         
         user_id = user_info['uid']
         
-        # Get user profile from Firestore
-        user_doc = db.collection('users').document(user_id).get()
-        
-        if user_doc.exists:
-            profile = user_doc.to_dict()
-        else:
-            # Create new user profile
-            profile = {
+        if request.method == 'GET':
+            # Get user profile from Firestore
+            user_doc = db.collection('users').document(user_id).get()
+            
+            if user_doc.exists:
+                profile = user_doc.to_dict()
+            else:
+                # Create new user profile
+                profile = {
+                    'user_id': user_id,
+                    'email': user_info.get('email'),
+                    'created_at': datetime.utcnow().isoformat(),
+                    'onboarding_complete': False,
+                    'cael_initialized': False
+                }
+                db.collection('users').document(user_id).set(profile)
+            
+            return jsonify(profile)
+            
+        elif request.method == 'POST':
+            # Create enhanced user profile (from registration)
+            data = request.get_json()
+            
+            enhanced_profile = {
                 'user_id': user_id,
                 'email': user_info.get('email'),
+                'full_name': data.get('name', ''),
+                'display_name': user_info.get('name', data.get('name', '')),
+                'is_veteran': data.get('is_veteran', False),
+                'marketing_opt_in': data.get('marketing_opt_in', False),
+                'registration_source': 'v9_enhanced',
+                'registration_date': data.get('registration_date', datetime.utcnow().isoformat()),
                 'created_at': datetime.utcnow().isoformat(),
                 'onboarding_complete': False,
-                'cael_initialized': False
+                'cael_initialized': False,
+                'email_verified': user_info.get('email_verified', False),
+                'account_status': 'active',
+                'privacy_settings': {
+                    'data_retention_consent': True,
+                    'marketing_consent': data.get('marketing_opt_in', False),
+                    'analytics_consent': True
+                }
             }
-            db.collection('users').document(user_id).set(profile)
-        
-        return jsonify(profile)
+            
+            db.collection('users').document(user_id).set(enhanced_profile)
+            logger.info(f"Enhanced user profile created for {user_id}")
+            
+            return jsonify({'success': True, 'profile': enhanced_profile})
     
     except Exception as e:
-        logger.error(f"Profile retrieval error: {e}")
-        return jsonify({'error': 'Failed to get profile'}), 500
+        logger.error(f"Profile handling error: {e}")
+        return jsonify({'error': 'Failed to handle profile'}), 500
 
 @app.route('/user/onboarding', methods=['POST'])
 def complete_onboarding():
-    """Complete user onboarding process"""
+    """Complete enhanced user onboarding process"""
     try:
         # Verify auth
         auth_header = request.headers.get('Authorization')
@@ -205,22 +236,77 @@ def complete_onboarding():
         user_id = user_info['uid']
         data = request.get_json()
         
-        # Update user profile with onboarding data
+        # Enhanced onboarding data structure
         onboarding_data = {
             'onboarding_complete': True,
             'onboarded_at': datetime.utcnow().isoformat(),
-            'preferences': data.get('preferences', {}),
+            'onboarding_version': data.get('onboarding_version', 'v9_enhanced'),
+            
+            # AI Companion Settings
             'cael_name': data.get('cael_name', 'Cael'),
-            'communication_style': data.get('communication_style', 'balanced')
+            'cael_initialized': True,
+            
+            # Communication Preferences
+            'communication_style': data.get('communication_style', 'balanced'),
+            'emotional_pacing': data.get('emotional_pacing', 'varies_situation'),
+            
+            # Personal Insights
+            'life_chapter': data.get('life_chapter', ''),
+            'sources_of_meaning': data.get('sources_of_meaning', []),
+            'effective_support': data.get('effective_support', []),
+            
+            # System Preferences
+            'preferences': {
+                'response_length': data.get('preferences', {}).get('response_length', 'balanced'),
+                'emotional_support': data.get('preferences', {}).get('emotional_support', 'moderate'),
+                'learning_speed': data.get('preferences', {}).get('learning_speed', 'moderate')
+            },
+            
+            # Personality Profile
+            'personality_profile': data.get('personality_profile', {}),
+            'profile_completeness': data.get('personality_profile', {}).get('profile_completeness', 0),
+            
+            # System Metadata
+            'last_updated': datetime.utcnow().isoformat(),
+            'version': '9.0'
         }
         
+        # Update user document
         db.collection('users').document(user_id).update(onboarding_data)
         
-        return jsonify({'success': True, 'message': 'Onboarding completed'})
+        # Store detailed onboarding response in separate collection for analytics
+        detailed_onboarding = {
+            'user_id': user_id,
+            'completed_at': datetime.utcnow().isoformat(),
+            'responses': {
+                'communication_style': data.get('communication_style'),
+                'emotional_pacing': data.get('emotional_pacing'),
+                'life_chapter': data.get('life_chapter'),
+                'sources_of_meaning': data.get('sources_of_meaning', []),
+                'effective_support': data.get('effective_support', []),
+                'cael_name': data.get('cael_name', 'Cael')
+            },
+            'personality_profile': data.get('personality_profile', {}),
+            'onboarding_duration': data.get('onboarding_duration'),
+            'platform': data.get('platform', 'web'),
+            'version': data.get('onboarding_version', 'v9_enhanced')
+        }
+        
+        # Store in onboarding_responses collection for analysis
+        db.collection('onboarding_responses').add(detailed_onboarding)
+        
+        logger.info(f"Enhanced onboarding completed for user {user_id}")
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Enhanced onboarding completed successfully',
+            'cael_name': data.get('cael_name', 'Cael'),
+            'profile_completeness': data.get('personality_profile', {}).get('profile_completeness', 0)
+        })
     
     except Exception as e:
-        logger.error(f"Onboarding error: {e}")
-        return jsonify({'error': 'Onboarding failed'}), 500
+        logger.error(f"Enhanced onboarding error: {e}")
+        return jsonify({'error': 'Enhanced onboarding failed'}), 500
 
 # Chat endpoints
 @app.route('/chat/message', methods=['POST'])
@@ -362,6 +448,114 @@ def get_chat_history():
     except Exception as e:
         logger.error(f"Chat history error: {e}")
         return jsonify({'error': 'Failed to get chat history'}), 500
+
+# Analytics and insights endpoints
+@app.route('/user/insights', methods=['GET'])
+def get_user_insights():
+    """Get user insights and analytics"""
+    try:
+        # Verify auth
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Authorization token required'}), 401
+        
+        token = auth_header.split('Bearer ')[1]
+        user_info = verify_firebase_token(token)
+        if not user_info:
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        user_id = user_info['uid']
+        
+        # Get user profile
+        user_doc = db.collection('users').document(user_id).get()
+        if not user_doc.exists:
+            return jsonify({'error': 'User profile not found'}), 404
+        
+        profile = user_doc.to_dict()
+        
+        # Get message count
+        messages_ref = db.collection('messages').where('user_id', '==', user_id)
+        message_count = len(list(messages_ref.stream()))
+        
+        # Calculate days since registration
+        created_at = profile.get('created_at')
+        days_active = 0
+        if created_at:
+            try:
+                from datetime import datetime
+                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                days_active = (datetime.utcnow().replace(tzinfo=created_date.tzinfo) - created_date).days
+            except:
+                days_active = 0
+        
+        # Build insights
+        insights = {
+            'user_id': user_id,
+            'profile_completeness': profile.get('profile_completeness', 0),
+            'onboarding_complete': profile.get('onboarding_complete', False),
+            'days_active': days_active,
+            'total_messages': message_count,
+            'cael_name': profile.get('cael_name', 'Cael'),
+            'communication_style': profile.get('communication_style', 'balanced'),
+            'personality_insights': {
+                'sources_of_meaning': profile.get('sources_of_meaning', []),
+                'effective_support': profile.get('effective_support', []),
+                'emotional_pacing': profile.get('emotional_pacing', ''),
+                'life_chapter': profile.get('life_chapter', '')
+            },
+            'engagement_level': 'high' if message_count > 50 else 'medium' if message_count > 10 else 'new',
+            'is_veteran': profile.get('is_veteran', False),
+            'generated_at': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify(insights)
+    
+    except Exception as e:
+        logger.error(f"User insights error: {e}")
+        return jsonify({'error': 'Failed to get insights'}), 500
+
+@app.route('/admin/onboarding-analytics', methods=['GET'])
+def get_onboarding_analytics():
+    """Get aggregated onboarding analytics (admin only)"""
+    try:
+        # In production, add admin authentication here
+        
+        # Get recent onboarding responses
+        onboarding_ref = db.collection('onboarding_responses')\
+                          .order_by('completed_at', direction=firestore.Query.DESCENDING)\
+                          .limit(100)
+        
+        responses = []
+        for doc in onboarding_ref.stream():
+            responses.append(doc.to_dict())
+        
+        # Analyze patterns
+        analytics = {
+            'total_responses': len(responses),
+            'completion_rate': len(responses),  # Simple metric for now
+            'popular_communication_styles': {},
+            'popular_meaning_sources': {},
+            'average_profile_completeness': 0,
+            'veteran_percentage': 0,
+            'generated_at': datetime.utcnow().isoformat()
+        }
+        
+        if responses:
+            # Aggregate communication styles
+            for response in responses:
+                style = response.get('responses', {}).get('communication_style', 'unknown')
+                analytics['popular_communication_styles'][style] = \
+                    analytics['popular_communication_styles'].get(style, 0) + 1
+            
+            # Calculate averages
+            completeness_scores = [r.get('personality_profile', {}).get('profile_completeness', 0) for r in responses]
+            analytics['average_profile_completeness'] = sum(completeness_scores) / len(completeness_scores)
+        
+        return jsonify(analytics)
+    
+    except Exception as e:
+        logger.error(f"Onboarding analytics error: {e}")
+        return jsonify({'error': 'Failed to get analytics'}), 500
 
 # Debug and admin endpoints
 @app.route('/admin/debug', methods=['GET'])
