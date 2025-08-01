@@ -14,6 +14,24 @@ import firebase_admin
 from firebase_admin import auth, firestore
 import openai
 
+# Add this near the top of your existing app.py after the imports:
+
+from utils import initialize_v9_modules, create_user_modules, check_dependencies
+
+# After your Firebase and OpenAI initialization, add:
+try:
+    # Initialize v9 module system
+    v9_modules = initialize_v9_modules(db, openai_client)
+    logger.info(f"✅ v9 modules initialized: {list(v9_modules.keys())}")
+except Exception as e:
+    logger.error(f"❌ v9 module initialization failed: {e}")
+
+# Then in your chat endpoint, use the modules:
+user_modules = create_user_modules(user_id, db, openai_client)
+if user_modules:
+    orchestrator = user_modules['orchestrator']
+    # Use orchestrator.process_message() instead of direct OpenAI calls
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
