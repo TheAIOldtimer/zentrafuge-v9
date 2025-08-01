@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with Cael - Zentrafuge v9</title>
+    
+    <link rel="icon" type="image/png" href="../assets/Zentrafuge-WIDE-Logo-Transparent.png">
+    
+    <!-- Firebase SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/chat.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header -->
+        <header class="chat-header">
+            <img src="../assets/Zentrafuge-WIDE-Logo-Transparent.png" alt="Zentrafuge" class="logo">
+            <div class="user-info">
+                <span class="user-name" id="user-name">Loading...</span>
+                <button class="logout-btn" id="logout-btn">Logout</button>
+            </div>
+        </header>
+
+        <!-- Main Chat Area -->
+        <main class="chat-main">
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will be dynamically added here -->
+            </div>
+        </main>
+
+        <!-- Chat Input -->
+        <footer class="chat-input">
+            <form id="chat-form" class="input-group">
+                <textarea 
+                    id="message-input" 
+                    class="message-input" 
+                    placeholder="Type your message to Cael..."
+                    rows="1"
+                ></textarea>
+                <button type="submit" class="send-btn" id="send-btn">Send</button>
+            </form>
+        </footer>
+    </div>
+
+    <!-- Modular JavaScript -->
+    <script src="../js/firebase.js"></script>
+    <script type="module" src="../js/chat.js"></script>
+</body>
+</html>
