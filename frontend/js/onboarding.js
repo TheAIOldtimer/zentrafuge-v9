@@ -1,11 +1,11 @@
-// js/onboarding.js - Enhanced onboarding functionality extracted from script.js
+// js/onboarding.js - Enhanced onboarding functionality with veteran support
 
 import Config from './config.js';
 import { showMessage, showLoading } from './utils.js';
 
 // Onboarding state
 let currentOnboardingStep = 0;
-const totalOnboardingSteps = 5; // 0-4
+const totalOnboardingSteps = 6; // 0-5 (Welcome, Name, Veteran, Communication, Emotional, Life Context, Completion)
 
 export function initializeOnboarding() {
     currentOnboardingStep = 0;
@@ -39,13 +39,22 @@ function setupOnboardingListeners() {
     // Completion button
     const completeButton = document.getElementById('complete-onboarding');
     if (completeButton) {
-        completeButton.addEventListener('click', completeOnboarding);
+        completeButton.addEventListener('click', completeVeteranOnboarding);
     }
     
     // Enter chat button
     const enterChatButton = document.getElementById('enter-chat');
     if (enterChatButton) {
         enterChatButton.addEventListener('click', enterChat);
+    }
+
+    // Veteran checkbox toggle
+    const veteranCheckbox = document.getElementById('veteran');
+    const veteranDetails = document.getElementById('veteran-details');
+    if (veteranCheckbox && veteranDetails) {
+        veteranCheckbox.addEventListener('change', () => {
+            veteranDetails.style.display = veteranCheckbox.checked ? 'block' : 'none';
+        });
     }
 }
 
@@ -68,14 +77,14 @@ function previousOnboardingStep() {
 function showOnboardingStep(step) {
     // Hide all steps
     for (let i = 0; i < totalOnboardingSteps; i++) {
-        const stepElement = document.getElementById(`onboarding-step-${i}`);
+        const stepElement = document.getElementById(i === 2 ? 'onboarding-step-veteran' : `onboarding-step-${i}`);
         if (stepElement) {
             stepElement.style.display = 'none';
         }
     }
     
     // Show current step
-    const currentStepElement = document.getElementById(`onboarding-step-${step}`);
+    const currentStepElement = document.getElementById(step === 2 ? 'onboarding-step-veteran' : `onboarding-step-${step}`);
     if (currentStepElement) {
         currentStepElement.style.display = 'block';
     }
@@ -111,7 +120,7 @@ function setCaelName(name) {
     }
 }
 
-export async function completeOnboarding() {
+async function completeVeteranOnboarding() {
     try {
         showLoading('onboarding-loading', true);
         
@@ -123,6 +132,15 @@ export async function completeOnboarding() {
             life_chapter: document.getElementById('life_chapter')?.value || '',
             sources_of_meaning: getSelectedCheckboxValues('sources_of_meaning'),
             effective_support: getSelectedCheckboxValues('effective_support'),
+            veteran_profile: {
+                is_veteran: document.getElementById('veteran')?.checked || false,
+                service_branch: document.getElementById('service_branch')?.value || null,
+                service_country: document.getElementById('service_country')?.value || 'US',
+                service_years: document.getElementById('service_years')?.value || null,
+                unit_served: document.getElementById('unit_served')?.value || null,
+                deployments: document.getElementById('deployments')?.value || null,
+                verification_status: 'pending' // Will be verified by backend
+            },
             preferences: {
                 response_length: 'balanced',
                 emotional_support: 'moderate',
@@ -154,11 +172,17 @@ export async function completeOnboarding() {
             const responseData = await response.json();
             console.log('✅ Onboarding completed successfully:', responseData);
             
+            // If veteran verification is approved, initialize veteran system
+            if (responseData.veteran_verified) {
+                const veteranSystem = await initializeVeteranSystem();
+                await veteranSystem.verifyVeteranStatus(user.uid, token);
+            }
+            
             // Store companion name globally
             window.companionName = onboardingData.cael_name;
             
             // Show completion step
-            showOnboardingStep(5); // Completion step
+            showOnboardingStep(5);
             
             // Show success message
             showMessage('onboarding-message', 'Setup completed successfully! Welcome to Zentrafuge.', false);
@@ -209,7 +233,8 @@ function calculateProfileCompleteness() {
         getSelectedRadioValue('emotional_pacing'),
         document.getElementById('life_chapter')?.value,
         getSelectedCheckboxValues('sources_of_meaning').length > 0,
-        getSelectedCheckboxValues('effective_support').length > 0
+        getSelectedCheckboxValues('effective_support').length > 0,
+        document.getElementById('veteran')?.checked
     ];
     
     const completedFields = fields.filter(field => field && field !== '').length;
