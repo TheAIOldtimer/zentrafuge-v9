@@ -1,12 +1,83 @@
+# Zentrafuge v9 - Python Dependencies
+# Core web framework
 Flask==2.3.2
-flask-cors==3.0.10
-flask-limiter==2.8.1
+flask-cors==4.0.0
+
+# Firebase integration
 firebase-admin==6.2.0
-openai>=1.3.0
-python-dotenv==1.0.0
+
+# OpenAI integration
+openai==1.3.0
+
+# Cryptography for memory encryption
 cryptography==41.0.3
-marshmallow==3.21.1
-gunicorn==23.0.0
-pytz==2023.3
-tqdm==4.66.0
-redis==5.0.0
+
+# HTTP requests and utilities
+requests==2.31.0
+urllib3==2.0.4
+
+# Date and time handling
+python-dateutil==2.8.2
+
+# JSON handling and validation
+jsonschema==4.19.0
+
+# Environment variable management
+python-dotenv==1.0.0
+
+# Logging and monitoring
+structlog==23.1.0
+
+# Development and testing
+pytest==7.4.0
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+
+# Security and validation
+email-validator==2.0.0
+pydantic==2.1.1
+
+# Performance and caching
+redis==4.6.0
+cachetools==5.3.1
+
+# Background tasks (optional)
+celery==5.3.1
+
+# Data processing
+pandas==2.0.3
+numpy==1.24.3
+
+# Web server for production
+gunicorn==21.2.0
+uvicorn==0.23.2
+
+# System monitoring
+psutil==5.9.5
+
+# Rate limiting
+flask-limiter==3.5.0
+
+# CORS and security headers
+flask-talisman==1.1.0
+
+# Database utilities
+sqlalchemy==2.0.19
+
+# Configuration management
+pyyaml==6.0.1
+
+# Async support
+aiofiles==23.2.1
+httpx==0.24.1
+
+# Development tools
+black==23.7.0
+flake8==6.0.0
+mypy==1.5.1
+
+# Documentation
+sphinx==7.1.2
+
+# Health checks and metrics
+prometheus-client==0.17.1
