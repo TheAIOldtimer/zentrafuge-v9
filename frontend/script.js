@@ -20,7 +20,7 @@ const Config = {
     // Update this to your backend URL - for local development:
     // API_BASE: 'http://localhost:5000'
     // For production, use your Render URL:
-    API_BASE: 'https://zentrafuge-v9.onrender.com', // Replace with your actual Render URL
+    API_BASE: 'https://your-render-app.onrender.com', // Replace with your actual Render URL
     MESSAGE_MAX_LENGTH: 2000,
     TYPING_DELAY: 1000,
     ERROR_DISPLAY_TIME: 5000,
@@ -277,18 +277,26 @@ async function getUserProfile() {
 }
 
 // Onboarding Functions
-let currentOnboardingStep = 1;
-const totalOnboardingSteps = 4;
+let currentOnboardingStep = 0;
+const totalOnboardingSteps = 5; // 0-4
 
 function initializeOnboarding() {
-    currentOnboardingStep = 1;
+    currentOnboardingStep = 0;
     updateOnboardingProgress();
-    showOnboardingStep(1);
+    showOnboardingStep(0);
 }
 
 function nextOnboardingStep() {
-    if (currentOnboardingStep < totalOnboardingSteps) {
+    if (currentOnboardingStep < totalOnboardingSteps - 1) {
         currentOnboardingStep++;
+        updateOnboardingProgress();
+        showOnboardingStep(currentOnboardingStep);
+    }
+}
+
+function previousOnboardingStep() {
+    if (currentOnboardingStep > 0) {
+        currentOnboardingStep--;
         updateOnboardingProgress();
         showOnboardingStep(currentOnboardingStep);
     }
@@ -296,7 +304,7 @@ function nextOnboardingStep() {
 
 function showOnboardingStep(step) {
     // Hide all steps
-    for (let i = 1; i <= totalOnboardingSteps; i++) {
+    for (let i = 0; i < totalOnboardingSteps; i++) {
         const stepElement = document.getElementById(`onboarding-step-${i}`);
         if (stepElement) {
             stepElement.style.display = 'none';
@@ -311,28 +319,40 @@ function showOnboardingStep(step) {
 }
 
 function updateOnboardingProgress() {
-    const progressBar = document.getElementById('onboarding-progress');
-    const percentage = (currentOnboardingStep / totalOnboardingSteps) * 100;
-    progressBar.style.width = `${percentage}%`;
+    const progressDots = document.querySelectorAll('.progress-dot');
+    progressDots.forEach((dot, index) => {
+        dot.classList.remove('active', 'completed');
+        if (index === currentOnboardingStep) {
+            dot.classList.add('active');
+        } else if (index < currentOnboardingStep) {
+            dot.classList.add('completed');
+        }
+    });
 }
 
 function setCaelName(name) {
-    document.getElementById('cael-name').value = name;
+    document.getElementById('ai_name').value = name;
 }
 
 async function completeOnboarding() {
     try {
         showLoading(true);
         
-        // Collect onboarding data
+        // Collect comprehensive onboarding data
         const onboardingData = {
-            cael_name: document.getElementById('cael-name').value || 'Cael',
-            communication_style: document.querySelector('input[name="communication-style"]:checked')?.value || 'balanced',
+            cael_name: document.getElementById('ai_name')?.value || 'Cael',
+            communication_style: getSelectedRadioValue('communication_style') || 'balanced',
+            emotional_pacing: getSelectedRadioValue('emotional_pacing') || 'varies_situation',
+            life_chapter: document.getElementById('life_chapter')?.value || '',
+            sources_of_meaning: getSelectedCheckboxValues('sources_of_meaning'),
+            effective_support: getSelectedCheckboxValues('effective_support'),
             preferences: {
-                response_length: document.getElementById('response-length').value,
-                emotional_support: document.getElementById('emotional-support').value,
-                learning_speed: document.getElementById('learning-speed').value
-            }
+                response_length: 'balanced',
+                emotional_support: 'moderate',
+                learning_speed: 'moderate'
+            },
+            onboarding_version: 'v9_enhanced',
+            personality_profile: generatePersonalityProfile()
         };
         
         // Send to backend
@@ -362,6 +382,46 @@ async function completeOnboarding() {
     } finally {
         showLoading(false);
     }
+}
+
+function getSelectedRadioValue(name) {
+    const selected = document.querySelector(`input[name="${name}"]:checked`);
+    return selected ? selected.value : null;
+}
+
+function getSelectedCheckboxValues(name) {
+    const selected = document.querySelectorAll(`input[name="${name}"]:checked`);
+    return Array.from(selected).map(cb => cb.value);
+}
+
+function generatePersonalityProfile() {
+    // Generate a personality profile based on user selections
+    const communicationStyle = getSelectedRadioValue('communication_style');
+    const emotionalPacing = getSelectedRadioValue('emotional_pacing');
+    const meaningSources = getSelectedCheckboxValues('sources_of_meaning');
+    const supportTypes = getSelectedCheckboxValues('effective_support');
+    
+    return {
+        communication_preference: communicationStyle,
+        emotional_processing: emotionalPacing,
+        meaning_sources: meaningSources,
+        preferred_support: supportTypes,
+        profile_completeness: calculateProfileCompleteness(),
+        generated_at: new Date().toISOString()
+    };
+}
+
+function calculateProfileCompleteness() {
+    const fields = [
+        getSelectedRadioValue('communication_style'),
+        getSelectedRadioValue('emotional_pacing'),
+        document.getElementById('life_chapter')?.value,
+        getSelectedCheckboxValues('sources_of_meaning').length > 0,
+        getSelectedCheckboxValues('effective_support').length > 0
+    ];
+    
+    const completedFields = fields.filter(field => field && field !== '').length;
+    return Math.round((completedFields / fields.length) * 100);
 }
 
 function enterChat() {
