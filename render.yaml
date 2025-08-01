@@ -1,0 +1,10 @@
+services:
+  - type: static
+    name: Zentrafuge.com
+    rootDir: frontend/html
+    publishPath: .
+    autoDeploy: true
+    redirects:
+      - source: /*
+        destination: /index.html
+        status: 200
