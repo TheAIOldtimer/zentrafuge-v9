@@ -27,19 +27,18 @@ logger = logging.getLogger(__name__)
 def init_firebase():
     try:
         if not firebase_admin._apps:
-            service_account_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS') or os.getenv('FIREBASE_SERVICE_ACCOUNT')
+            service_account_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
             if service_account_json:
-                cred = firebase_admin.credentials.Certificate(json.loads(service_account_json))
-                firebase_admin.initialize_app(cred)
-                logger.info("Firebase initialized from environment")
-            else:
-                cred_path = 'serviceAccountKey.json'
-                if os.path.exists(cred_path):
-                    cred = firebase_admin.credentials.Certificate(cred_path)
-                    firebase_admin.initialize_app(cred)
-                    logger.info("Firebase initialized from file")
+                if service_account_json.strip().startswith('{'):
+                    # Inline JSON string
+                    cred = firebase_admin.credentials.Certificate(json.loads(service_account_json))
                 else:
-                    raise FileNotFoundError("No Firebase credentials found.")
+                    # File path
+                    cred = firebase_admin.credentials.Certificate(service_account_json)
+                firebase_admin.initialize_app(cred)
+                logger.info("Firebase initialized from GOOGLE_APPLICATION_CREDENTIALS")
+            else:
+                raise FileNotFoundError("GOOGLE_APPLICATION_CREDENTIALS not set.")
         return firestore.client()
     except Exception as e:
         logger.error(f"Firebase init failed: {e}")
@@ -202,8 +201,3 @@ def chat():
         logger.error(f"OpenAI error: {e}")
         fallback = "Cael is having trouble responding right now. Please try again soon."
         return jsonify({'success': True, 'response': fallback, 'fallback': True})
-
-# ──────────────── Entry Point ──────────────── #
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
