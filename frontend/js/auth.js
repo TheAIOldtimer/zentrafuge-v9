@@ -1,3 +1,5 @@
+// js/auth.js - Authentication Logic (Updated for your Firebase setup)
+
 import Config from './config.js';
 import { waitForFirebase, showMessage, showLoading, getFirebaseErrorMessage } from './utils.js';
 import { createUserProfile } from './api.js';
@@ -9,7 +11,7 @@ export async function registerUser(formData) {
     
     await waitForFirebase();
     
-    // Create Firebase user
+    // Use global firebase from your firebase.js
     const userCredential = await firebase.auth().createUserWithEmailAndPassword(
       formData.email, 
       formData.password
@@ -49,6 +51,7 @@ export async function loginUser(email, password) {
     
     await waitForFirebase();
     
+    // Use global firebase from your firebase.js
     const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
     
     showMessage('message', 'Login successful! Redirecting...', false);
