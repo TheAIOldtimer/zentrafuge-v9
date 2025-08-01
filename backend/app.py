@@ -176,14 +176,31 @@ def chat():
         'timestamp': datetime.utcnow().isoformat()
     })
 
-    try:
-        response = openai_client.chat.comp_response = openai_client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[
-        {"role": "system", "content": "You are Cael, an emotionally intelligent AI companion."},
-        {"role": "user", "content": message}
-    ],
-    max_tokens=500,
-    temperature=0.7
-)
+        try:
+    response = openai_client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are Cael, an emotionally intelligent AI companion."},
+            {"role": "user", "content": message}
+        ],
+        max_tokens=500,
+        temperature=0.7
+    )
+    reply = response.choices[0].message.content
+
+    db.collection('messages').add({
+        'user_id': user_id,
+        'role': 'assistant',
+        'content': reply,
+        'timestamp': datetime.utcnow().isoformat(),
+        'model': 'gpt-3.5-turbo'
+    })
+
+    return jsonify({'success': True, 'response': reply})
+
+except Exception as e:
+    logger.error(f"OpenAI error: {e}")
+    fallback = "Cael is having trouble responding right now. Please try again soon."
+    return jsonify({'success': True, 'response': fallback, 'fallback': True})
+
 
