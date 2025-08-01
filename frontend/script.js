@@ -20,7 +20,7 @@ const Config = {
     // Update this to your backend URL - for local development:
     // API_BASE: 'http://localhost:5000'
     // For production, use your Render URL:
-    API_BASE: 'https://your-render-app.onrender.com', // Replace with your actual Render URL
+    API_BASE: 'https://zentrafuge-v9.onrender.com', // Your actual Render URL
     MESSAGE_MAX_LENGTH: 2000,
     TYPING_DELAY: 1000,
     ERROR_DISPLAY_TIME: 5000,
@@ -41,6 +41,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Setup event listeners
         setupEventListeners();
         
+        // Wait for Firebase to be ready
+        await waitForFirebase();
+        
         // Initialize Firebase and check auth state
         await initializeApp();
         
@@ -49,6 +52,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         showError('Failed to initialize application. Please refresh and try again.');
     }
 });
+
+// Wait for Firebase initialization
+function waitForFirebase() {
+    return new Promise((resolve, reject) => {
+        if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+            resolve();
+            return;
+        }
+        
+        // Listen for Firebase ready event
+        window.addEventListener('firebaseReady', () => {
+            resolve();
+        });
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+            reject(new Error('Firebase initialization timeout'));
+        }, 10000);
+    });
+}
 
 // Cache frequently used DOM elements
 function cacheElements() {
