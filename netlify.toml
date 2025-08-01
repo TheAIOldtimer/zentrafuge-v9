@@ -1,7 +1,12 @@
 [build]
-  publish = "frontend/html"
-  command = "" # No build command needed for static HTML
+  publish = "frontend"
+
+[[redirects]]
+  from = "/"
+  to = "/html/index.html"
+  status = 200
+
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/html/index.html"
   status = 200
