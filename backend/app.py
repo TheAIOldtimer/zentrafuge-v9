@@ -28,15 +28,25 @@ def init_firebase():
     try:
         # Check if already initialized
         if not firebase_admin._apps:
-            # Load service account key from file
-            service_account_path = 'serviceAccountKey.json'
-            if os.path.exists(service_account_path):
-                cred = firebase_admin.credentials.Certificate(service_account_path)
+            # Try to load from environment variable first (for production)
+            service_account_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+            
+            if service_account_json:
+                # Parse JSON from environment variable
+                service_account_dict = json.loads(service_account_json)
+                cred = firebase_admin.credentials.Certificate(service_account_dict)
                 firebase_admin.initialize_app(cred)
-                logger.info("Firebase Admin SDK initialized successfully")
+                logger.info("Firebase Admin SDK initialized from environment variable")
             else:
-                logger.error("serviceAccountKey.json not found")
-                raise FileNotFoundError("Firebase service account key missing")
+                # Fall back to file-based approach (for local development)
+                service_account_path = 'serviceAccountKey.json'
+                if os.path.exists(service_account_path):
+                    cred = firebase_admin.credentials.Certificate(service_account_path)
+                    firebase_admin.initialize_app(cred)
+                    logger.info("Firebase Admin SDK initialized from file")
+                else:
+                    logger.error("No Firebase credentials found in environment or file")
+                    raise FileNotFoundError("Firebase service account key missing")
         
         # Initialize Firestore client
         db = firestore.client()
@@ -81,6 +91,24 @@ def verify_firebase_token(token):
     except Exception as e:
         logger.error(f"Token verification failed: {e}")
         return None
+
+# Root endpoint
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint with API information"""
+    return jsonify({
+        'service': 'Zentrafuge v9 API',
+        'status': 'running',
+        'version': '9.0.0',
+        'timestamp': datetime.utcnow().isoformat(),
+        'endpoints': {
+            'health': '/health',
+            'auth': '/auth/verify',
+            'chat': '/chat/message',
+            'user': '/user/profile'
+        },
+        'documentation': 'https://github.com/TheAIOldtimer/zentrafuge-v9'
+    })
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])
@@ -344,7 +372,8 @@ def debug_info():
             'timestamp': datetime.utcnow().isoformat(),
             'environment': {
                 'openai_key_set': bool(os.getenv('OPENAI_API_KEY')),
-                'firebase_key_exists': os.path.exists('serviceAccountKey.json')
+                'firebase_key_exists': os.path.exists('serviceAccountKey.json'),
+                'firebase_env_set': bool(os.getenv('FIREBASE_SERVICE_ACCOUNT'))
             },
             'services': {
                 'firebase_initialized': db is not None,
