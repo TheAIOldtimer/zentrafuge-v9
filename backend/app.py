@@ -28,8 +28,8 @@ def init_firebase():
     try:
         # Check if already initialized
         if not firebase_admin._apps:
-            # Try to load from environment variable first (for production)
-            service_account_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+            # Try to load from environment variables first (for production)
+            service_account_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS') or os.getenv('FIREBASE_SERVICE_ACCOUNT')
             
             if service_account_json:
                 # Parse JSON from environment variable
@@ -373,6 +373,7 @@ def debug_info():
             'environment': {
                 'openai_key_set': bool(os.getenv('OPENAI_API_KEY')),
                 'firebase_key_exists': os.path.exists('serviceAccountKey.json'),
+                'google_creds_set': bool(os.getenv('GOOGLE_APPLICATION_CREDENTIALS')),
                 'firebase_env_set': bool(os.getenv('FIREBASE_SERVICE_ACCOUNT'))
             },
             'services': {
