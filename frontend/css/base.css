@@ -1,0 +1,23 @@
+:root {
+  --primary-blue: #003366;
+  --secondary-blue: #0055aa;
+  --gradient-bg: linear-gradient(135deg, #003366 0%, #0055aa 100%);
+  --text-dark: #333;
+  --text-light: #666;
+  --success-color: #166534;
+  --error-color: #dc2626;
+  --border-color: #e0e0e0;
+  --border-radius: 6px;
+  --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  margin: 0;
+  padding: 0;
+  color: var(--text-dark);
+}
