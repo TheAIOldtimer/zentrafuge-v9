@@ -14,23 +14,16 @@ import firebase_admin
 from firebase_admin import auth, firestore
 import openai
 
-openai_api_key = os.environ.get("OPENAI_API_KEY")
-client = openai.OpenAI(api_key=openai_api_key)
+# ──────────────── Initialize Flask and Logging ──────────────── #
 
-
-@app.route("/")
-def index():
-    return "Zentrafuge v9 backend is live."
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend communication
 
-# Firebase initialization
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ──────────────── Firebase Init ──────────────── #
+
 def init_firebase():
     try:
         if not firebase_admin._apps:
@@ -52,7 +45,10 @@ def init_firebase():
         logger.error(f"Firebase init failed: {e}")
         return None
 
-# OpenAI initialization
+db = init_firebase()
+
+# ──────────────── OpenAI Init ──────────────── #
+
 def init_openai():
     try:
         key = os.getenv("OPENAI_API_KEY")
@@ -65,11 +61,10 @@ def init_openai():
         logger.error(f"OpenAI init failed: {e}")
         return None
 
-# Global services
-db = init_firebase()
 openai_client = init_openai()
 
-# Auth helper
+# ──────────────── Helpers ──────────────── #
+
 def verify_firebase_token(token):
     try:
         return auth.verify_id_token(token)
@@ -174,7 +169,6 @@ def chat():
     if not openai_client:
         return jsonify({'error': 'AI unavailable'}), 503
 
-    # Store user message
     db.collection('messages').add({
         'user_id': user_id,
         'role': 'user',
@@ -183,29 +177,4 @@ def chat():
     })
 
     try:
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are Cael, an emotionally intelligent AI companion."},
-                {"role": "user", "content": message}
-            ],
-            max_tokens=500,
-            temperature=0.7
-        )
-        reply = response.choices[0].message.content
-        db.collection('messages').add({
-            'user_id': user_id,
-            'role': 'assistant',
-            'content': reply,
-            'timestamp': datetime.utcnow().isoformat(),
-            'model': 'gpt-3.5-turbo'
-        })
-        return jsonify({'success': True, 'response': reply})
-    except Exception as e:
-        logger.error(f"OpenAI error: {e}")
-        fallback = "Cael is having trouble responding right now. Please try again soon."
-        return jsonify({'success': True, 'response': fallback, 'fallback': True})
-
-# ──────────────── Run Locally ──────────────── #
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+        response = openai_client.chat.comp_
