@@ -14,6 +14,10 @@ import firebase_admin
 from firebase_admin import auth, firestore
 import openai
 
+openai_api_key = os.environ.get("OPENAI_API_KEY")
+client = openai.OpenAI(api_key=openai_api_key)
+
+
 @app.route("/")
 def index():
     return "Zentrafuge v9 backend is live."
