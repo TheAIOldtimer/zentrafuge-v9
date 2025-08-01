@@ -14,24 +14,6 @@ import firebase_admin
 from firebase_admin import auth, firestore
 import openai
 
-# Add this near the top of your existing app.py after the imports:
-
-from utils import initialize_v9_modules, create_user_modules, check_dependencies
-
-# After your Firebase and OpenAI initialization, add:
-try:
-    # Initialize v9 module system
-    v9_modules = initialize_v9_modules(db, openai_client)
-    logger.info(f"✅ v9 modules initialized: {list(v9_modules.keys())}")
-except Exception as e:
-    logger.error(f"❌ v9 module initialization failed: {e}")
-
-# Then in your chat endpoint, use the modules:
-user_modules = create_user_modules(user_id, db, openai_client)
-if user_modules:
-    orchestrator = user_modules['orchestrator']
-    # Use orchestrator.process_message() instead of direct OpenAI calls
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,80 +22,57 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend communication
 
-# Initialize Firebase Admin SDK
+# Firebase initialization
 def init_firebase():
-    """Initialize Firebase Admin SDK with service account key"""
     try:
-        # Check if already initialized
         if not firebase_admin._apps:
-            # Try to load from environment variables first (for production)
             service_account_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS') or os.getenv('FIREBASE_SERVICE_ACCOUNT')
-            
             if service_account_json:
-                # Parse JSON from environment variable
-                service_account_dict = json.loads(service_account_json)
-                cred = firebase_admin.credentials.Certificate(service_account_dict)
+                cred = firebase_admin.credentials.Certificate(json.loads(service_account_json))
                 firebase_admin.initialize_app(cred)
-                logger.info("Firebase Admin SDK initialized from environment variable")
+                logger.info("Firebase initialized from environment")
             else:
-                # Fall back to file-based approach (for local development)
-                service_account_path = 'serviceAccountKey.json'
-                if os.path.exists(service_account_path):
-                    cred = firebase_admin.credentials.Certificate(service_account_path)
+                cred_path = 'serviceAccountKey.json'
+                if os.path.exists(cred_path):
+                    cred = firebase_admin.credentials.Certificate(cred_path)
                     firebase_admin.initialize_app(cred)
-                    logger.info("Firebase Admin SDK initialized from file")
+                    logger.info("Firebase initialized from file")
                 else:
-                    logger.error("No Firebase credentials found in environment or file")
-                    raise FileNotFoundError("Firebase service account key missing")
-        
-        # Initialize Firestore client
-        db = firestore.client()
-        return db
+                    raise FileNotFoundError("No Firebase credentials found.")
+        return firestore.client()
     except Exception as e:
-        logger.error(f"Firebase initialization failed: {e}")
-        raise
-
-# Initialize OpenAI client
-def init_openai():
-    """Initialize OpenAI client with API key from environment"""
-    try:
-        openai_api_key = os.getenv('OPENAI_API_KEY')
-        if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
-        
-        client = openai.OpenAI(api_key=openai_api_key)
-        logger.info("OpenAI client initialized successfully")
-        return client
-    except Exception as e:
-        logger.error(f"OpenAI initialization failed: {e}")
-        raise
-
-# Global clients
-db = None
-openai_client = None
-
-# Initialize services on startup
-try:
-    db = init_firebase()
-    openai_client = init_openai()
-except Exception as e:
-    logger.error(f"Service initialization failed: {e}")
-    # App will still start but services won't be available
-
-# Authentication middleware
-def verify_firebase_token(token):
-    """Verify Firebase ID token and return user info"""
-    try:
-        decoded_token = auth.verify_id_token(token)
-        return decoded_token
-    except Exception as e:
-        logger.error(f"Token verification failed: {e}")
+        logger.error(f"Firebase init failed: {e}")
         return None
 
-# Root endpoint
-@app.route('/', methods=['GET'])
+# OpenAI initialization
+def init_openai():
+    try:
+        key = os.getenv("OPENAI_API_KEY")
+        if not key:
+            raise ValueError("OPENAI_API_KEY not set")
+        client = openai.OpenAI(api_key=key)
+        logger.info("OpenAI client initialized")
+        return client
+    except Exception as e:
+        logger.error(f"OpenAI init failed: {e}")
+        return None
+
+# Global services
+db = init_firebase()
+openai_client = init_openai()
+
+# Auth helper
+def verify_firebase_token(token):
+    try:
+        return auth.verify_id_token(token)
+    except Exception as e:
+        logger.error(f"Token verify failed: {e}")
+        return None
+
+# ──────────────── ROUTES ──────────────── #
+
+@app.route('/')
 def root():
-    """Root endpoint with API information"""
     return jsonify({
         'service': 'Zentrafuge v9 API',
         'status': 'running',
@@ -124,491 +83,121 @@ def root():
             'auth': '/auth/verify',
             'chat': '/chat/message',
             'user': '/user/profile'
-        },
-        'documentation': 'https://github.com/TheAIOldtimer/zentrafuge-v9'
+        }
     })
 
-# Health check endpoint
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint for monitoring"""
-    status = {
+@app.route('/health')
+def health():
+    return jsonify({
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'services': {
-            'firebase': db is not None,
-            'openai': openai_client is not None
-        }
-    }
-    return jsonify(status)
+        'firebase': db is not None,
+        'openai': openai_client is not None,
+        'timestamp': datetime.utcnow().isoformat()
+    })
 
-# Authentication endpoints
 @app.route('/auth/verify', methods=['POST'])
 def verify_auth():
-    """Verify user authentication token"""
-    try:
-        data = request.get_json()
-        token = data.get('token')
-        
-        if not token:
-            return jsonify({'error': 'Token required'}), 400
-        
-        user_info = verify_firebase_token(token)
-        if not user_info:
-            return jsonify({'error': 'Invalid token'}), 401
-        
-        return jsonify({
-            'valid': True,
-            'user_id': user_info['uid'],
-            'email': user_info.get('email')
-        })
-    
-    except Exception as e:
-        logger.error(f"Auth verification error: {e}")
-        return jsonify({'error': 'Authentication failed'}), 500
+    data = request.get_json()
+    token = data.get('token')
+    if not token:
+        return jsonify({'error': 'Token required'}), 400
+    user = verify_firebase_token(token)
+    if not user:
+        return jsonify({'error': 'Invalid token'}), 401
+    return jsonify({'valid': True, 'user_id': user['uid'], 'email': user.get('email')})
 
-# User profile endpoints
 @app.route('/user/profile', methods=['GET', 'POST'])
-def handle_user_profile():
-    """Get or create user profile"""
-    try:
-        # Get auth token from header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Authorization token required'}), 401
-        
-        token = auth_header.split('Bearer ')[1]
-        user_info = verify_firebase_token(token)
-        if not user_info:
-            return jsonify({'error': 'Invalid token'}), 401
-        
-        user_id = user_info['uid']
-        
-        if request.method == 'GET':
-            # Get user profile from Firestore
-            user_doc = db.collection('users').document(user_id).get()
-            
-            if user_doc.exists:
-                profile = user_doc.to_dict()
-            else:
-                # Create new user profile
-                profile = {
-                    'user_id': user_id,
-                    'email': user_info.get('email'),
-                    'created_at': datetime.utcnow().isoformat(),
-                    'onboarding_complete': False,
-                    'cael_initialized': False
-                }
-                db.collection('users').document(user_id).set(profile)
-            
-            return jsonify(profile)
-            
-        elif request.method == 'POST':
-            # Create enhanced user profile (from registration)
-            data = request.get_json()
-            
-            enhanced_profile = {
+def user_profile():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Authorization required'}), 401
+    token = auth_header.split(' ')[1]
+    user_info = verify_firebase_token(token)
+    if not user_info:
+        return jsonify({'error': 'Invalid token'}), 401
+    user_id = user_info['uid']
+
+    if request.method == 'GET':
+        doc = db.collection('users').document(user_id).get()
+        if doc.exists:
+            return jsonify(doc.to_dict())
+        else:
+            default_profile = {
                 'user_id': user_id,
                 'email': user_info.get('email'),
-                'full_name': data.get('name', ''),
-                'display_name': user_info.get('name', data.get('name', '')),
-                'is_veteran': data.get('is_veteran', False),
-                'marketing_opt_in': data.get('marketing_opt_in', False),
-                'registration_source': 'v9_enhanced',
-                'registration_date': data.get('registration_date', datetime.utcnow().isoformat()),
                 'created_at': datetime.utcnow().isoformat(),
                 'onboarding_complete': False,
-                'cael_initialized': False,
-                'email_verified': user_info.get('email_verified', False),
-                'account_status': 'active',
-                'privacy_settings': {
-                    'data_retention_consent': True,
-                    'marketing_consent': data.get('marketing_opt_in', False),
-                    'analytics_consent': True
-                }
+                'cael_initialized': False
             }
-            
-            db.collection('users').document(user_id).set(enhanced_profile)
-            logger.info(f"Enhanced user profile created for {user_id}")
-            
-            return jsonify({'success': True, 'profile': enhanced_profile})
-    
-    except Exception as e:
-        logger.error(f"Profile handling error: {e}")
-        return jsonify({'error': 'Failed to handle profile'}), 500
+            db.collection('users').document(user_id).set(default_profile)
+            return jsonify(default_profile)
 
-@app.route('/user/onboarding', methods=['POST'])
-def complete_onboarding():
-    """Complete enhanced user onboarding process"""
-    try:
-        # Verify auth
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Authorization token required'}), 401
-        
-        token = auth_header.split('Bearer ')[1]
-        user_info = verify_firebase_token(token)
-        if not user_info:
-            return jsonify({'error': 'Invalid token'}), 401
-        
-        user_id = user_info['uid']
+    elif request.method == 'POST':
         data = request.get_json()
-        
-        # Enhanced onboarding data structure
-        onboarding_data = {
-            'onboarding_complete': True,
-            'onboarded_at': datetime.utcnow().isoformat(),
-            'onboarding_version': data.get('onboarding_version', 'v9_enhanced'),
-            
-            # AI Companion Settings
-            'cael_name': data.get('cael_name', 'Cael'),
-            'cael_initialized': True,
-            
-            # Communication Preferences
-            'communication_style': data.get('communication_style', 'balanced'),
-            'emotional_pacing': data.get('emotional_pacing', 'varies_situation'),
-            
-            # Personal Insights
-            'life_chapter': data.get('life_chapter', ''),
-            'sources_of_meaning': data.get('sources_of_meaning', []),
-            'effective_support': data.get('effective_support', []),
-            
-            # System Preferences
-            'preferences': {
-                'response_length': data.get('preferences', {}).get('response_length', 'balanced'),
-                'emotional_support': data.get('preferences', {}).get('emotional_support', 'moderate'),
-                'learning_speed': data.get('preferences', {}).get('learning_speed', 'moderate')
-            },
-            
-            # Personality Profile
-            'personality_profile': data.get('personality_profile', {}),
-            'profile_completeness': data.get('personality_profile', {}).get('profile_completeness', 0),
-            
-            # System Metadata
-            'last_updated': datetime.utcnow().isoformat(),
-            'version': '9.0'
-        }
-        
-        # Update user document
-        db.collection('users').document(user_id).update(onboarding_data)
-        
-        # Store detailed onboarding response in separate collection for analytics
-        detailed_onboarding = {
+        profile = {
             'user_id': user_id,
-            'completed_at': datetime.utcnow().isoformat(),
-            'responses': {
-                'communication_style': data.get('communication_style'),
-                'emotional_pacing': data.get('emotional_pacing'),
-                'life_chapter': data.get('life_chapter'),
-                'sources_of_meaning': data.get('sources_of_meaning', []),
-                'effective_support': data.get('effective_support', []),
-                'cael_name': data.get('cael_name', 'Cael')
-            },
-            'personality_profile': data.get('personality_profile', {}),
-            'onboarding_duration': data.get('onboarding_duration'),
-            'platform': data.get('platform', 'web'),
-            'version': data.get('onboarding_version', 'v9_enhanced')
+            'email': user_info.get('email'),
+            'full_name': data.get('name', ''),
+            'is_veteran': data.get('is_veteran', False),
+            'marketing_opt_in': data.get('marketing_opt_in', False),
+            'registration_date': data.get('registration_date', datetime.utcnow().isoformat()),
+            'created_at': datetime.utcnow().isoformat(),
+            'onboarding_complete': False,
+            'cael_initialized': False
         }
-        
-        # Store in onboarding_responses collection for analysis
-        db.collection('onboarding_responses').add(detailed_onboarding)
-        
-        logger.info(f"Enhanced onboarding completed for user {user_id}")
-        
-        return jsonify({
-            'success': True, 
-            'message': 'Enhanced onboarding completed successfully',
-            'cael_name': data.get('cael_name', 'Cael'),
-            'profile_completeness': data.get('personality_profile', {}).get('profile_completeness', 0)
-        })
-    
-    except Exception as e:
-        logger.error(f"Enhanced onboarding error: {e}")
-        return jsonify({'error': 'Enhanced onboarding failed'}), 500
+        db.collection('users').document(user_id).set(profile)
+        return jsonify({'success': True, 'profile': profile})
 
-# Chat endpoints
 @app.route('/chat/message', methods=['POST'])
-def handle_chat_message():
-    """Handle incoming chat message and generate AI response"""
-    try:
-        # Verify auth
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Authorization token required'}), 401
-        
-        token = auth_header.split('Bearer ')[1]
-        user_info = verify_firebase_token(token)
-        if not user_info:
-            return jsonify({'error': 'Invalid token'}), 401
-        
-        user_id = user_info['uid']
-        data = request.get_json()
-        message = data.get('message', '').strip()
-        
-        if not message:
-            return jsonify({'error': 'Message required'}), 400
-        
-        if not openai_client:
-            return jsonify({'error': 'AI service unavailable'}), 503
-        
-        # Store user message
-        user_message_doc = {
-            'user_id': user_id,
-            'role': 'user',
-            'content': message,
-            'timestamp': datetime.utcnow().isoformat(),
-            'message_id': f"user_{datetime.utcnow().timestamp()}"
-        }
-        
-        db.collection('messages').add(user_message_doc)
-        
-        # Generate AI response (simplified for now)
-        try:
-            response = openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",  # Cost-effective fallback model
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": "You are Cael, an emotionally intelligent AI companion. You are caring, thoughtful, and focused on the user's wellbeing. Keep responses conversational and supportive."
-                    },
-                    {"role": "user", "content": message}
-                ],
-                max_tokens=500,
-                temperature=0.7
-            )
-            
-            ai_response = response.choices[0].message.content
-            
-            # Store AI response
-            ai_message_doc = {
-                'user_id': user_id,
-                'role': 'assistant',
-                'content': ai_response,
-                'timestamp': datetime.utcnow().isoformat(),
-                'message_id': f"cael_{datetime.utcnow().timestamp()}",
-                'model_used': 'gpt-3.5-turbo',
-                'tokens_used': response.usage.total_tokens
-            }
-            
-            db.collection('messages').add(ai_message_doc)
-            
-            return jsonify({
-                'success': True,
-                'response': ai_response,
-                'message_id': ai_message_doc['message_id'],
-                'tokens_used': response.usage.total_tokens
-            })
-        
-        except Exception as openai_error:
-            logger.error(f"OpenAI API error: {openai_error}")
-            
-            # Fallback response
-            fallback_response = "I'm having trouble connecting to my AI systems right now. Please try again in a moment."
-            
-            ai_message_doc = {
-                'user_id': user_id,
-                'role': 'assistant',
-                'content': fallback_response,
-                'timestamp': datetime.utcnow().isoformat(),
-                'message_id': f"fallback_{datetime.utcnow().timestamp()}",
-                'is_fallback': True
-            }
-            
-            db.collection('messages').add(ai_message_doc)
-            
-            return jsonify({
-                'success': True,
-                'response': fallback_response,
-                'message_id': ai_message_doc['message_id'],
-                'is_fallback': True
-            })
-    
-    except Exception as e:
-        logger.error(f"Chat message error: {e}")
-        return jsonify({'error': 'Failed to process message'}), 500
+def chat():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Authorization required'}), 401
+    token = auth_header.split(' ')[1]
+    user_info = verify_firebase_token(token)
+    if not user_info:
+        return jsonify({'error': 'Invalid token'}), 401
 
-@app.route('/chat/history', methods=['GET'])
-def get_chat_history():
-    """Get user's chat history"""
+    user_id = user_info['uid']
+    data = request.get_json()
+    message = data.get('message', '').strip()
+    if not message:
+        return jsonify({'error': 'Message required'}), 400
+    if not openai_client:
+        return jsonify({'error': 'AI unavailable'}), 503
+
+    # Store user message
+    db.collection('messages').add({
+        'user_id': user_id,
+        'role': 'user',
+        'content': message,
+        'timestamp': datetime.utcnow().isoformat()
+    })
+
     try:
-        # Verify auth
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Authorization token required'}), 401
-        
-        token = auth_header.split('Bearer ')[1]
-        user_info = verify_firebase_token(token)
-        if not user_info:
-            return jsonify({'error': 'Invalid token'}), 401
-        
-        user_id = user_info['uid']
-        
-        # Get recent messages (limit to last 50)
-        messages_ref = db.collection('messages')\
-                        .where('user_id', '==', user_id)\
-                        .order_by('timestamp', direction=firestore.Query.DESCENDING)\
-                        .limit(50)
-        
-        messages = []
-        for doc in messages_ref.stream():
-            message_data = doc.to_dict()
-            messages.append(message_data)
-        
-        # Reverse to get chronological order
-        messages.reverse()
-        
-        return jsonify({
-            'success': True,
-            'messages': messages,
-            'count': len(messages)
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are Cael, an emotionally intelligent AI companion."},
+                {"role": "user", "content": message}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        reply = response.choices[0].message.content
+        db.collection('messages').add({
+            'user_id': user_id,
+            'role': 'assistant',
+            'content': reply,
+            'timestamp': datetime.utcnow().isoformat(),
+            'model': 'gpt-3.5-turbo'
         })
-    
+        return jsonify({'success': True, 'response': reply})
     except Exception as e:
-        logger.error(f"Chat history error: {e}")
-        return jsonify({'error': 'Failed to get chat history'}), 500
+        logger.error(f"OpenAI error: {e}")
+        fallback = "Cael is having trouble responding right now. Please try again soon."
+        return jsonify({'success': True, 'response': fallback, 'fallback': True})
 
-# Analytics and insights endpoints
-@app.route('/user/insights', methods=['GET'])
-def get_user_insights():
-    """Get user insights and analytics"""
-    try:
-        # Verify auth
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Authorization token required'}), 401
-        
-        token = auth_header.split('Bearer ')[1]
-        user_info = verify_firebase_token(token)
-        if not user_info:
-            return jsonify({'error': 'Invalid token'}), 401
-        
-        user_id = user_info['uid']
-        
-        # Get user profile
-        user_doc = db.collection('users').document(user_id).get()
-        if not user_doc.exists:
-            return jsonify({'error': 'User profile not found'}), 404
-        
-        profile = user_doc.to_dict()
-        
-        # Get message count
-        messages_ref = db.collection('messages').where('user_id', '==', user_id)
-        message_count = len(list(messages_ref.stream()))
-        
-        # Calculate days since registration
-        created_at = profile.get('created_at')
-        days_active = 0
-        if created_at:
-            try:
-                from datetime import datetime
-                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                days_active = (datetime.utcnow().replace(tzinfo=created_date.tzinfo) - created_date).days
-            except:
-                days_active = 0
-        
-        # Build insights
-        insights = {
-            'user_id': user_id,
-            'profile_completeness': profile.get('profile_completeness', 0),
-            'onboarding_complete': profile.get('onboarding_complete', False),
-            'days_active': days_active,
-            'total_messages': message_count,
-            'cael_name': profile.get('cael_name', 'Cael'),
-            'communication_style': profile.get('communication_style', 'balanced'),
-            'personality_insights': {
-                'sources_of_meaning': profile.get('sources_of_meaning', []),
-                'effective_support': profile.get('effective_support', []),
-                'emotional_pacing': profile.get('emotional_pacing', ''),
-                'life_chapter': profile.get('life_chapter', '')
-            },
-            'engagement_level': 'high' if message_count > 50 else 'medium' if message_count > 10 else 'new',
-            'is_veteran': profile.get('is_veteran', False),
-            'generated_at': datetime.utcnow().isoformat()
-        }
-        
-        return jsonify(insights)
-    
-    except Exception as e:
-        logger.error(f"User insights error: {e}")
-        return jsonify({'error': 'Failed to get insights'}), 500
-
-@app.route('/admin/onboarding-analytics', methods=['GET'])
-def get_onboarding_analytics():
-    """Get aggregated onboarding analytics (admin only)"""
-    try:
-        # In production, add admin authentication here
-        
-        # Get recent onboarding responses
-        onboarding_ref = db.collection('onboarding_responses')\
-                          .order_by('completed_at', direction=firestore.Query.DESCENDING)\
-                          .limit(100)
-        
-        responses = []
-        for doc in onboarding_ref.stream():
-            responses.append(doc.to_dict())
-        
-        # Analyze patterns
-        analytics = {
-            'total_responses': len(responses),
-            'completion_rate': len(responses),  # Simple metric for now
-            'popular_communication_styles': {},
-            'popular_meaning_sources': {},
-            'average_profile_completeness': 0,
-            'veteran_percentage': 0,
-            'generated_at': datetime.utcnow().isoformat()
-        }
-        
-        if responses:
-            # Aggregate communication styles
-            for response in responses:
-                style = response.get('responses', {}).get('communication_style', 'unknown')
-                analytics['popular_communication_styles'][style] = \
-                    analytics['popular_communication_styles'].get(style, 0) + 1
-            
-            # Calculate averages
-            completeness_scores = [r.get('personality_profile', {}).get('profile_completeness', 0) for r in responses]
-            analytics['average_profile_completeness'] = sum(completeness_scores) / len(completeness_scores)
-        
-        return jsonify(analytics)
-    
-    except Exception as e:
-        logger.error(f"Onboarding analytics error: {e}")
-        return jsonify({'error': 'Failed to get analytics'}), 500
-
-# Debug and admin endpoints
-@app.route('/admin/debug', methods=['GET'])
-def debug_info():
-    """Debug endpoint for system status"""
-    try:
-        debug_data = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'environment': {
-                'openai_key_set': bool(os.getenv('OPENAI_API_KEY')),
-                'firebase_key_exists': os.path.exists('serviceAccountKey.json'),
-                'google_creds_set': bool(os.getenv('GOOGLE_APPLICATION_CREDENTIALS')),
-                'firebase_env_set': bool(os.getenv('FIREBASE_SERVICE_ACCOUNT'))
-            },
-            'services': {
-                'firebase_initialized': db is not None,
-                'openai_initialized': openai_client is not None
-            }
-        }
-        
-        return jsonify(debug_data)
-    
-    except Exception as e:
-        logger.error(f"Debug info error: {e}")
-        return jsonify({'error': 'Debug info failed'}), 500
-
-# Error handlers
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'error': 'Endpoint not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
-
+# ──────────────── Run Locally ──────────────── #
 if __name__ == '__main__':
-    # Development server
     app.run(debug=True, host='0.0.0.0', port=5000)
