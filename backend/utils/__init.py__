@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""
+Zentrafuge v9 Utils Module - Modular Memory-First Architecture
+Lazy loading and dependency management for backend modules
+"""
+
+# Version info
+__version__ = "9.0.0"
+__author__ = "Zentrafuge Team"
+
+import logging
+logger = logging.getLogger(__name__)
+
+# Module availability tracking
+MODULES_AVAILABLE = {
+    "memory_storage": False,
+    "orchestrator": False, 
+    "crypto_handler": False,
+    "firebase_admin": False,
+    "openai": False,
+    "veteran_verification": False
+}
+
+def check_dependencies():
+    """Check if all required dependencies are available"""
+    required_modules = {
+        "firebase_admin": "firebase_admin",
+        "openai": "openai", 
+        "cryptography": "cryptography"
+    }
+    
+    missing = []
+    available = {}
+    
+    for module_name, import_name in required_modules.items():
+        try:
+            __import__(import_name)
+            available[module_name] = True
+        except ImportError:
+            available[module_name] = False
+            missing.append(module_name)
+    
+    # Update global availability
+    MODULES_AVAILABLE.update(available)
+    
+    return {
+        "all_available": len(missing) == 0,
+        "missing": missing,
+        "available": available,
+        "modules": MODULES_AVAILABLE
+    }
+
+def get_memory_storage():
+    """Get memory storage with lazy loading"""
+    try:
+        from .memory_storage import MemoryStorage
+        MODULES_AVAILABLE["memory_storage"] = True
+        return MemoryStorage
+    except ImportError as e:
+        logger.error(f"Error importing memory_storage: {e}")
+        MODULES_AVAILABLE["memory_storage"] = False
+        return None
+
+def get_orchestrator():
+    """Get orchestrator with lazy loading"""
+    try:
+        from .orchestrator import CaelOrchestrator, create_orchestrator
+        MODULES_AVAILABLE["orchestrator"] = True
+        return CaelOrchestrator, create_orchestrator
+    except ImportError as e:
+        logger.error(f"Error importing orchestrator: {e}")
+        MODULES_AVAILABLE["orchestrator"] = False
+        return None, None
+
+def get_crypto_handler():
+    """Get crypto handler with lazy loading"""
+    try:
+        from .crypto_handler import MemoryEncryption, SecureTokenGenerator, DataValidator
+        MODULES_AVAILABLE["crypto_handler"] = True
+        return MemoryEncryption, SecureTokenGenerator, DataValidator
+    except ImportError as e:
+        logger.error(f"Error importing crypto_handler: {e}")
+        MODULES_AVAILABLE["crypto_handler"] = False
+        return None, None, None
+
+def get_veteran_system():
+    """Get veteran verification system with lazy loading"""
+    try:
+        from .veteran_verification import VeteranVerificationSystem
+        MODULES_AVAILABLE["veteran_verification"] = True
+        return VeteranVerificationSystem
+    except ImportError as e:
+        logger.error(f"Error importing veteran_verification: {e}")
+        MODULES_AVAILABLE["veteran_verification"] = False
+        return None
+
+def initialize_v9_modules(db=None, openai_client=None):
+    """
+    Initialize all v9 modules with dependency injection
+    
+    Args:
+        db: Firestore database client
+        openai_client: OpenAI client instance
+        
+    Returns:
+        Dict of initialized modules
+    """
+    modules = {}
+    
+    # Initialize crypto handler (no dependencies)
+    crypto_classes = get_crypto_handler()
+    if crypto_classes[0]:  # MemoryEncryption
+        modules['crypto'] = {
+            'MemoryEncryption': crypto_classes[0],
+            'SecureTokenGenerator': crypto_classes[1], 
+            'DataValidator': crypto_classes[2]
+        }
+        logger.info("✅ Crypto handler initialized")
+    
+    # Initialize memory storage (requires db and crypto)
+    if db and 'crypto' in modules:
+        MemoryStorage = get_memory_storage()
+        if MemoryStorage:
+            modules['memory_storage_class'] = MemoryStorage
+            logger.info("✅ Memory storage class available")
+    
+    # Initialize orchestrator (requires all dependencies)
+    if db and openai_client and 'memory_storage_class' in modules:
+        orchestrator_classes = get_orchestrator()
+        if orchestrator_classes[0]:  # CaelOrchestrator
+            modules['orchestrator'] = {
+                'CaelOrchestrator': orchestrator_classes[0],
+                'create_orchestrator': orchestrator_classes[1]
+            }
+            logger.info("✅ Orchestrator available")
+    
+    # Initialize veteran system (optional)
+    VeteranSystem = get_veteran_system()
+    if VeteranSystem:
+        modules['veteran_system'] = VeteranSystem
+        logger.info("✅ Veteran verification system available")
+    
+    return modules
+
+def create_user_modules(user_id: str, db, openai_client):
+    """
+    Create user-specific module instances
+    
+    Args:
+        user_id: User identifier
+        db: Firestore database client
+        openai_client: OpenAI client instance
+        
+    Returns:
+        Dict of user-specific module instances
+    """
+    try:
+        # Get module classes
+        MemoryStorage = get_memory_storage()
+        orchestrator_funcs = get_orchestrator()
+        
+        if not MemoryStorage or not orchestrator_funcs[0]:
+            logger.error("Required modules not available")
+            return None
+        
+        # Create user-specific instances
+        memory_storage = MemoryStorage(db, user_id)
+        orchestrator = orchestrator_funcs[1](user_id, db, openai_client, memory_storage)
+        
+        user_modules = {
+            'memory_storage': memory_storage,
+            'orchestrator': orchestrator,
+            'user_id': user_id
+        }
+        
+        logger.info(f"✅ User modules created for {user_id}")
+        return user_modules
+        
+    except Exception as e:
+        logger.error(f"Failed to create user modules: {e}")
+        return None
+
+def get_module_status():
+    """Return status of all utility modules"""
+    return MODULES_AVAILABLE.copy()
+
+def test_v9_modules():
+    """Test all v9 modules for basic functionality"""
+    results = {}
+    
+    # Test crypto handler
+    crypto_classes = get_crypto_handler()
+    if crypto_classes[0]:
+        try:
+            encryption = crypto_classes[0]()
+            test_result = encryption.test_encryption()
+            results['crypto_handler'] = test_result
+        except Exception as e:
+            results['crypto_handler'] = f"Error: {e}"
+    else:
+        results['crypto_handler'] = "Not available"
+    
+    # Test memory storage class (without DB)
+    MemoryStorage = get_memory_storage()
+    results['memory_storage'] = MemoryStorage is not None
+    
+    # Test orchestrator class (without dependencies)
+    orchestrator_classes = get_orchestrator()
+    results['orchestrator'] = orchestrator_classes[0] is not None
+    
+    # Test veteran system
+    VeteranSystem = get_veteran_system()
+    results['veteran_system'] = VeteranSystem is not None
+    
+    return results
+
+# Export main functions
+__all__ = [
+    'check_dependencies',
+    'get_memory_storage', 
+    'get_orchestrator',
+    'get_crypto_handler',
+    'get_veteran_system',
+    'initialize_v9_modules',
+    'create_user_modules',
+    'get_module_status',
+    'test_v9_modules',
+    'MODULES_AVAILABLE'
+]
+
+# Auto-check dependencies on import
+try:
+    dependency_status = check_dependencies()
+    if dependency_status["all_available"]:
+        logger.info("✅ All v9 dependencies available")
+    else:
+        logger.warning(f"⚠️ Missing dependencies: {dependency_status['missing']}")
+except Exception as e:
+    logger.error(f"❌ Error checking dependencies: {e}")
