@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zentrafuge Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 2rem; }
+        .status { padding: 1rem; margin: 1rem 0; border-radius: 6px; }
+        .success { background: #f0fdf4; color: #166534; }
+        .error { background: #fef2f2; color: #dc2626; }
+    </style>
+</head>
+<body>
+    <h1>Zentrafuge v9 Test Page</h1>
+    
+    <div id="firebase-status" class="status">Testing Firebase...</div>
+    <div id="backend-status" class="status">Testing Backend...</div>
+    
+    <button onclick="testLogin()">Test Login</button>
+    
+    <!-- Firebase SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    
+    <script>
+        // Firebase Config (from your firebase.js)
+        const firebaseConfig = {
+            apiKey: "AIzaSyA0UGTSall_tMMIQWd7PBrjM-xIibiAQ-8",
+            authDomain: "zentrafuge-v9.firebaseapp.com",
+            projectId: "zentrafuge-v9",
+            storageBucket: "zentrafuge-v9.appspot.com",
+            messagingSenderId: "188961704770",
+            appId: "1:188961704770:web:91de60d7aa0c696c52d6db"
+        };
+        
+        // Test Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+            document.getElementById('firebase-status').innerHTML = '✅ Firebase initialized successfully!';
+            document.getElementById('firebase-status').className = 'status success';
+        } catch (error) {
+            document.getElementById('firebase-status').innerHTML = '❌ Firebase failed: ' + error.message;
+            document.getElementById('firebase-status').className = 'status error';
+        }
+        
+        // Test Backend
+        async function testBackend() {
+            try {
+                const response = await fetch('http://localhost:5000/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('backend-status').innerHTML = '✅ Backend connected: ' + data.status;
+                    document.getElementById('backend-status').className = 'status success';
+                } else {
+                    throw new Error('Backend returned ' + response.status);
+                }
+            } catch (error) {
+                document.getElementById('backend-status').innerHTML = '❌ Backend failed: ' + error.message;
+                document.getElementById('backend-status').className = 'status error';
+            }
+        }
+        
+        // Test login
+        async function testLogin() {
+            try {
+                const user = await firebase.auth().signInWithEmailAndPassword('test@example.com', 'password123');
+                alert('Login test successful!');
+            } catch (error) {
+                alert('Login test failed: ' + error.message);
+            }
+        }
+        
+        // Run backend test on load
+        testBackend();
+    </script>
+</body>
+</html>
