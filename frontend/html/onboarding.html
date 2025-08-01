@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Your AI Companion - Zentrafuge v9</title>
+    
+    <link rel="icon" type="image/png" href="../assets/Zentrafuge-WIDE-Logo-Transparent.png">
+    
+    <!-- Firebase SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/auth.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="onboarding-container">
+            <div class="onboarding-header">
+                <img src="../assets/Zentrafuge-WIDE-Logo-Transparent.png" alt="Zentrafuge" class="logo">
+                <h1>Welcome to Zentrafuge</h1>
+                <p class="subtitle">Let's set up your AI companion</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: 20%;"></div>
+                </div>
+            </div>
+
+            <div id="onboarding-loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Setting up your companion...</p>
+            </div>
+
+            <div id="onboarding-message"></div>
+
+            <!-- Step 0: Welcome -->
+            <div id="onboarding-step-0" class="onboarding-step">
+                <h2>🧠 Meet Your AI Companion</h2>
+                <p>Zentrafuge v9 creates a unique AI companion that learns with you, grows alongside you, and respects your data sovereignty.</p>
+                
+                <ul class="feature-list">
+                    <li>🔐 <strong>Your data belongs to you</strong> - End-to-end encryption</li>
+                    <li>🧠 <strong>Memory-first relationships</strong> - Your companion remembers and learns</li>
+                    <li>💼 <strong>AI economic participation</strong> - You benefit from AI growth</li>
+                    <li>🌱 <strong>Emotional intelligence</strong> - Designed for genuine support</li>
+                </ul>
+                
+                <button type="button" class="btn btn-primary onboarding-next">Get Started</button>
+            </div>
+
+            <!-- Step 1: Name Your Companion -->
+            <div id="onboarding-step-1" class="onboarding-step" style="display: none;">
+                <h2>✨ Name Your Companion</h2>
+                <p>What would you like to call your AI companion? This creates a personal bond and identity.</p>
+                
+                <div class="form-group">
+                    <label for="ai_name">Companion Name</label>
+                    <input type="text" id="ai_name" value="Cael" placeholder="Enter a name...">
+                </div>
+                
+                <div class="name-suggestions">
+                    <p>Popular choices:</p>
+                    <button type="button" class="name-btn">Cael</button>
+                    <button type="button" class="name-btn">Nova</button>
+                    <button type="button" class="name-btn">Aria</button>
+                    <button type="button" class="name-btn">Sage</button>
+                    <button type="button" class="name-btn">Echo</button>
+                    <button type="button" class="name-btn">Luna</button>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary onboarding-prev">Back</button>
+                    <button type="button" class="btn btn-primary onboarding-next">Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Communication Style -->
+            <div id="onboarding-step-2" class="onboarding-step" style="display: none;">
+                <h2>💬 Communication Preferences</h2>
+                <p>How do you prefer to communicate? This helps your companion match your style.</p>
+                
+                <div class="style-options">
+                    <label class="style-option">
+                        <input type="radio" name="communication_style" value="direct">
+                        <div class="style-card">
+                            <h3>Direct & Clear</h3>
+                            <p>Straightforward, concise responses. Gets to the point quickly.</p>
+                        </div>
+                    </label>
+                    
+                    <label class="style-option">
+                        <input type="radio" name="communication_style" value="warm">
+                        <div class="style-card">
+                            <h3>Warm & Supportive</h3>
+                            <p>Gentle, encouraging tone with emotional warmth and empathy.</p>
+                        </div>
+                    </label>
+                    
+                    <label class="style-option">
+                        <input type="radio" name="communication_style" value="analytical">
+                        <div class="style-card">
+                            <h3>Analytical & Thoughtful</h3>
+                            <p>Detailed explanations with logical reasoning and insights.</p>
+                        </div>
+                    </label>
+                    
+                    <label class="style-option">
+                        <input type="radio" name="communication_style" value="balanced" checked>
+                        <div class="style-card">
+                            <h3>Balanced & Adaptive</h3>
+                            <p>Flexible style that adapts to your needs and the situation.</p>
+                        </div>
+                    </label>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary onboarding-prev">Back</button>
+                    <button type="button" class="btn btn-primary onboarding-next">Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Emotional Support Preferences -->
+            <div id="onboarding-step-3" class="onboarding-step" style="display: none;">
+                <h2>🌱 Emotional Support Style</h2>
+                <p>How do you process emotions and receive support?</p>
+                
+                <div class="style-options">
+                    <label class="style-option">
+                        <input type="radio" name="emotional_pacing" value="immediate">
+                        <div class="style-card">
+                            <h3>Immediate Processing</h3>
+                            <p>I like to talk through emotions right away and get quick insights.</p>
+                        </div>
+                    </label>
+                    
+                    <label class="style-option">
+                        <input type="radio" name="emotional_pacing" value="gradual">
+                        <div class="style-card">
+                            <h3>Gradual Exploration</h3>
+                            <p>I prefer to slowly unpack emotions over time with gentle guidance.</p>
+                        </div>
+                    </label>
+                    
+                    <label class="style-option">
+                        <input type="radio" name="emotional_pacing" value="varies_situation" checked>
+                        <div class="style-card">
+                            <h3>Situational</h3>
+                            <p>It depends on what I'm going through - sometimes fast, sometimes slow.</p>
+                        </div>
+                    </label>
+                    
+                    <label class="style-option">
+                        <input type="radio" name="emotional_pacing" value="minimal">
+                        <div class="style-card">
+                            <h3>Light Touch</h3>
+                            <p>I prefer minimal emotional processing - more focus on practical solutions.</p>
+                        </div>
+                    </label>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary onboarding-prev">Back</button>
+                    <button type="button" class="btn btn-primary onboarding-next">Continue</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Life Context -->
+            <div id="onboarding-step-4" class="onboarding-step" style="display: none;">
+                <h2>🎯 Tell Us About Your Journey</h2>
+                <p>Share what's meaningful to you right now. This helps your companion understand your context.</p>
+                
+                <div class="form-group">
+                    <label for="life_chapter">What chapter of life are you in? (Optional)</label>
+                    <textarea id="life_chapter" rows="3" placeholder="e.g., Starting a new career, focusing on family, exploring personal growth, dealing with challenges..."></textarea>
+                </div>
+                
+                <div class="preferences-grid">
+                    <div class="preference-group">
+                        <label>What gives your life meaning? (Select all that apply)</label>
+                        <div class="checkbox-group" style="flex-direction: column; gap: 0.5rem;">
+                            <label><input type="checkbox" name="sources_of_meaning" value="relationships"> Close relationships and family</label>
+                            <label><input type="checkbox" name="sources_of_meaning" value="career"> Career and professional growth</label>
+                            <label><input type="checkbox" name="sources_of_meaning" value="creativity"> Creative expression and arts</label>
+                            <label><input type="checkbox" name="sources_of_meaning" value="service"> Helping others and service</label>
+                            <label><input type="checkbox" name="sources_of_meaning" value="learning"> Learning and personal development</label>
+                            <label><input type="checkbox" name="sources_of_meaning" value="spirituality"> Spirituality and inner growth</label>
+                            <label><input type="checkbox" name="sources_of_meaning" value="adventure"> Adventure and new experiences</label>
+                        </div>
+                    </div>
+                    
+                    <div class="preference-group">
+                        <label>What kind of support helps you most? (Select all that apply)</label>
+                        <div class="checkbox-group" style="flex-direction: column; gap: 0.5rem;">
+                            <label><input type="checkbox" name="effective_support" value="listening"> Someone who listens without judgment</label>
+                            <label><input type="checkbox" name="effective_support" value="advice"> Practical advice and suggestions</label>
+                            <label><input type="checkbox" name="effective_support" value="encouragement"> Encouragement and motivation</label>
+                            <label><input type="checkbox" name="effective_support" value="perspective"> New perspectives and insights</label>
+                            <label><input type="checkbox" name="effective_support" value="accountability"> Accountability and goal tracking</label>
+                            <label><input type="checkbox" name="effective_support" value="companionship"> Just having company and presence</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary onboarding-prev">Back</button>
+                    <button type="button" class="btn btn-primary" id="complete-onboarding">Complete Setup</button>
+                </div>
+            </div>
+
+            <!-- Step 5: Completion -->
+            <div id="onboarding-step-5" class="onboarding-step" style="display: none;">
+                <div class="completion-animation">
+                    <div class="checkmark">✓</div>
+                    <h2>🎉 Welcome to Zentrafuge!</h2>
+                    <p>Your AI companion is ready to meet you. This is the beginning of a unique relationship built on trust, growth, and data sovereignty.</p>
+                </div>
+                
+                <div class="feature-list">
+                    <li>🔐 Your data is encrypted and belongs to you</li>
+                    <li>🧠 Your companion will learn and grow with you</li>
+                    <li>💡 You'll participate in any AI economic value created</li>
+                    <li>🌱 This relationship can evolve as you do</li>
+                </div>
+                
+                <button type="button" class="btn btn-primary" id="enter-chat">Start Chatting</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modular JavaScript -->
+    <script src="../js/firebase.js"></script>
+    <script type="module" src="../js/onboarding.js"></script>
+    <script type="module">
+        import { initializeOnboarding } from '../js/onboarding.js';
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is authenticated
+            firebase.auth().onAuthStateChanged((user) => {
+                if (user) {
+                    initializeOnboarding();
+                } else {
+                    // Redirect to login if not authenticated
+                    window.location.href = '../index.html';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
