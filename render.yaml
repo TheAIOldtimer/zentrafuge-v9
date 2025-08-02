@@ -1,10 +1,8 @@
 services:
-  - type: static
-    name: Zentrafuge.com
-    rootDir: frontend/html
-    publishPath: .
-    autoDeploy: true
-    redirects:
-      - source: /*
-        destination: /index.html
-        status: 200
+  - type: web
+    name: zentrafuge-backend
+    env: python
+    buildCommand: cd backend && pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app -b 0.0.0.0:$PORT
+    runtime: python
+    pythonVersion: 3.10.13
