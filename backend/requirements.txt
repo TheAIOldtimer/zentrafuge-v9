@@ -1,4 +1,4 @@
-# Critical for wheel builds
+--extra-index-url https://pypi.org/simple
 setuptools>=61.0.0
 wheel
 build
