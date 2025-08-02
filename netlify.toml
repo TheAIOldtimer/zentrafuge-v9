@@ -1,11 +1,64 @@
 [build]
   publish = "frontend"
+  command = ""
 
 [[redirects]]
   from = "/"
   to = "/html/index.html"
   status = 200
 
+[[redirects]]
+  from = "/chat"
+  to = "/html/chat.html"
+  status = 200
+  force = true
+
+# Core HTML Pages
+[[redirects]]
+  from = "/index.html"
+  to = "/html/index.html"
+  status = 200
+[[redirects]]
+  from = "/chat.html"
+  to = "/html/chat.html"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/register.html"
+  to = "/html/register.html"
+  status = 200
+[[redirects]]
+  from = "/onboarding.html"
+  to = "/html/onboarding.html"
+  status = 200
+[[redirects]]
+  from = "/email-verified.html"
+  to = "/html/email-verified.html"
+  status = 200
+[[redirects]]
+  from = "/terms.html"
+  to = "/html/terms.html"
+  status = 200
+
+# Serve static JS/CSS/Assets directly
+[[redirects]]
+  from = "/js/*"
+  to = "/js/:splat"
+  status = 200
+[[redirects]]
+  from = "/css/*"
+  to = "/css/:splat"
+  status = 200
+[[redirects]]
+  from = "/assets/*"
+  to = "/assets/:splat"
+  status = 200
+[[redirects]]
+  from = "/translations/*"
+  to = "/translations/:splat"
+  status = 200
+
+# Default catch-all
 [[redirects]]
   from = "/*"
   to = "/html/index.html"
