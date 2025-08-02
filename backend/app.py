@@ -201,3 +201,7 @@ def chat():
         logger.error(f"OpenAI error: {e}")
         fallback = "Cael is having trouble responding right now. Please try again soon."
         return jsonify({'success': True, 'response': fallback, 'fallback': True})
+
+    @app.route("/", methods=["GET"])
+    def health_check():
+        return jsonify({"status": "ok", "message": "Zentrafuge backend running"}), 200
