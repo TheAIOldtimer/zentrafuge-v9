@@ -26,10 +26,10 @@ export async function registerUser(formData) {
 
     const user = userCredential.user;
 
-    // Optionally send email verification
-    // await user.sendEmailVerification();
+    // ✅ Send email verification
+    await user.sendEmailVerification();
 
-    // Update Firebase user profile with display name
+    // ✅ Update Firebase user profile with display name
     await user.updateProfile({ displayName: formData.name });
 
     // Create user profile in your backend
@@ -50,12 +50,16 @@ export async function registerUser(formData) {
       );
     }
 
-    // Notify user and redirect
-    showMessage('message', 'Account created successfully! Redirecting...', false);
+    // ✅ Notify user and redirect
+    showMessage(
+      'message',
+      'Account created! Please check your email and verify before logging in.',
+      false
+    );
 
     setTimeout(() => {
       window.location.href = Config?.ROUTES?.login || 'index.html';
-    }, Config.REDIRECT_DELAY);
+    }, Config.REDIRECT_DELAY || 3000);
   } catch (error) {
     console.error('Registration error:', error);
     showMessage('message', getFirebaseErrorMessage(error), true);
@@ -80,17 +84,18 @@ export async function loginUser(email, password) {
 
     const user = userCredential.user;
 
-    // Optional: Enforce email verification
-    // if (!user.emailVerified) {
-    //   showMessage('message', 'Please verify your email before logging in.', true);
-    //   return;
-    // }
+    // ✅ Enforce email verification
+    if (!user.emailVerified) {
+      await firebase.auth().signOut();
+      showMessage('message', 'Please verify your email before logging in.', true);
+      return;
+    }
 
     showMessage('message', 'Login successful! Redirecting...', false);
 
     setTimeout(() => {
       window.location.href = Config?.ROUTES?.chat || 'chat.html';
-    }, Config.REDIRECT_DELAY);
+    }, Config.REDIRECT_DELAY || 2000);
   } catch (error) {
     console.error('Login error:', error);
     showMessage('message', getFirebaseErrorMessage(error), true);
