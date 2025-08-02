@@ -2,11 +2,10 @@ services:
   - type: web
     name: zentrafuge-backend
     env: python
-    buildCommand: cd backend && pip install --upgrade pip && pip install -r requirements.txt
     startCommand: gunicorn app:app -b 0.0.0.0:$PORT
     runtime: python
     pythonVersion: 3.10.13
+
 buildCommand: |
   pip install --upgrade pip setuptools wheel build &&
-  pip install -r backend/requirements.txt &&
-  gunicorn app:app -b 0.0.0.0:$PORT
+  pip install -r backend/requirements.txt
