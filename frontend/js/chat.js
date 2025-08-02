@@ -4,6 +4,23 @@ import Config from './config.js';
 import { sendChatMessage } from './api.js';
 import { waitForFirebase } from './utils.js';
 
+async function checkUserProfile() {
+  await waitForFirebase();
+  
+  const user = firebase.auth().currentUser;
+  if (!user) {
+    window.location.href = 'index.html'; // Not logged in
+    return;
+  }
+
+  const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
+  if (!userDoc.exists || !userDoc.data().onboarding_complete) {
+    window.location.href = 'onboarding.html'; // Redirect if not onboarded
+  }
+}
+
+checkUserProfile();
+
 let currentUser = null;
 let chatContainer = null;
 let messageInput = null;
