@@ -6,5 +6,6 @@ services:
       cd backend
       pip install --upgrade pip setuptools wheel build
       pip install -r requirements.txt
-    startCommand: cd backend && gunicorn app:app -b 0.0.0.0:$PORT
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app -b 0.0.0.0:$PORT
     pythonVersion: 3.10.13
