@@ -84,4 +84,7 @@ prometheus-client==0.17.1
 
 # Add this to the bottom of backend/requirements.txt:
 setuptools>=61.0.0
+wheel
+build
+
 
