@@ -7,6 +7,7 @@ Modular, secure, memory-first AI companion architecture
 import os
 import json
 import logging
+import time
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -14,56 +15,57 @@ import firebase_admin
 from firebase_admin import auth, firestore
 import openai
 
-# ──────────────── Initialize Flask and Logging ──────────────── #
-
+# Initialize Flask and Logging
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend communication
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ──────────────── Firebase Init ──────────────── #
+# Global variables for lazy initialization
+db = None
+openai_client = None
 
+# Firebase Init
 def init_firebase():
-    try:
-        if not firebase_admin._apps:
-            service_account_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-            if service_account_json:
-                if service_account_json.strip().startswith('{'):
-                    # Inline JSON string
-                    cred = firebase_admin.credentials.Certificate(json.loads(service_account_json))
+    global db
+    if db is None:
+        start_time = time.time()
+        try:
+            if not firebase_admin._apps:
+                service_account_json = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+                if service_account_json:
+                    if service_account_json.strip().startswith('{'):
+                        cred = firebase_admin.credentials.Certificate(json.loads(service_account_json))
+                    else:
+                        cred = firebase_admin.credentials.Certificate(service_account_json)
+                    firebase_admin.initialize_app(cred)
+                    logger.info(f"Firebase initialized in {time.time() - start_time:.2f} seconds")
                 else:
-                    # File path
-                    cred = firebase_admin.credentials.Certificate(service_account_json)
-                firebase_admin.initialize_app(cred)
-                logger.info("Firebase initialized from GOOGLE_APPLICATION_CREDENTIALS")
-            else:
-                raise FileNotFoundError("GOOGLE_APPLICATION_CREDENTIALS not set.")
-        return firestore.client()
-    except Exception as e:
-        logger.error(f"Firebase init failed: {e}")
-        return None
+                    raise FileNotFoundError("GOOGLE_APPLICATION_CREDENTIALS not set.")
+            db = firestore.client()
+        except Exception as e:
+            logger.error(f"Firebase init failed: {e}")
+            db = None
+    return db
 
-db = init_firebase()
-
-# ──────────────── OpenAI Init ──────────────── #
-
+# OpenAI Init
 def init_openai():
-    try:
-        key = os.getenv("OPENAI_API_KEY")
-        if not key:
-            raise ValueError("OPENAI_API_KEY not set")
-        client = openai.OpenAI(api_key=key)
-        logger.info("OpenAI client initialized")
-        return client
-    except Exception as e:
-        logger.error(f"OpenAI init failed: {e}")
-        return None
+    global openai_client
+    if openai_client is None:
+        start_time = time.time()
+        try:
+            key = os.getenv("OPENAI_API_KEY")
+            if not key:
+                raise ValueError("OPENAI_API_KEY not set")
+            openai_client = openai.OpenAI(api_key=key)
+            logger.info(f"OpenAI client initialized in {time.time() - start_time:.2f} seconds")
+        except Exception as e:
+            logger.error(f"OpenAI init failed: {e}")
+            openai_client = None
+    return openai_client
 
-openai_client = init_openai()
-
-# ──────────────── Helpers ──────────────── #
-
+# Helpers
 def verify_firebase_token(token):
     try:
         return auth.verify_id_token(token)
@@ -71,8 +73,7 @@ def verify_firebase_token(token):
         logger.error(f"Token verify failed: {e}")
         return None
 
-# ──────────────── ROUTES ──────────────── #
-
+# Routes
 @app.route('/')
 def root():
     return jsonify({
@@ -92,8 +93,8 @@ def root():
 def health():
     return jsonify({
         'status': 'healthy',
-        'firebase': db is not None,
-        'openai': openai_client is not None,
+        'firebase': init_firebase() is not None,
+        'openai': init_openai() is not None,
         'timestamp': datetime.utcnow().isoformat()
     })
 
@@ -118,9 +119,12 @@ def user_profile():
     if not user_info:
         return jsonify({'error': 'Invalid token'}), 401
     user_id = user_info['uid']
+    db_local = init_firebase()
+    if not db_local:
+        return jsonify({'error': 'Database unavailable'}), 503
 
     if request.method == 'GET':
-        doc = db.collection('users').document(user_id).get()
+        doc = db_local.collection('users').document(user_id).get()
         if doc.exists:
             return jsonify(doc.to_dict())
         else:
@@ -131,7 +135,7 @@ def user_profile():
                 'onboarding_complete': False,
                 'cael_initialized': False
             }
-            db.collection('users').document(user_id).set(default_profile)
+            db_local.collection('users').document(user_id).set(default_profile)
             return jsonify(default_profile)
 
     elif request.method == 'POST':
@@ -147,7 +151,7 @@ def user_profile():
             'onboarding_complete': False,
             'cael_initialized': False
         }
-        db.collection('users').document(user_id).set(profile)
+        db_local.collection('users').document(user_id).set(profile)
         return jsonify({'success': True, 'profile': profile})
 
 @app.route('/chat/message', methods=['POST'])
@@ -165,10 +169,14 @@ def chat():
     message = data.get('message', '').strip()
     if not message:
         return jsonify({'error': 'Message required'}), 400
-    if not openai_client:
+    local_openai = init_openai()
+    if not local_openai:
         return jsonify({'error': 'AI unavailable'}), 503
+    db_local = init_firebase()
+    if not db_local:
+        return jsonify({'error': 'Database unavailable'}), 503
 
-    db.collection('messages').add({
+    db_local.collection('messages').add({
         'user_id': user_id,
         'role': 'user',
         'content': message,
@@ -176,7 +184,7 @@ def chat():
     })
 
     try:
-        response = openai_client.chat.completions.create(
+        response = local_openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are Cael, an emotionally intelligent AI companion."},
@@ -187,7 +195,7 @@ def chat():
         )
         reply = response.choices[0].message.content
 
-        db.collection('messages').add({
+        db_local.collection('messages').add({
             'user_id': user_id,
             'role': 'assistant',
             'content': reply,
@@ -201,7 +209,3 @@ def chat():
         logger.error(f"OpenAI error: {e}")
         fallback = "Cael is having trouble responding right now. Please try again soon."
         return jsonify({'success': True, 'response': fallback, 'fallback': True})
-
-    @app.route("/", methods=["GET"])
-    def health_check():
-        return jsonify({"status": "ok", "message": "Zentrafuge backend running"}), 200
