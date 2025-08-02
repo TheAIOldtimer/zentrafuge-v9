@@ -30,9 +30,16 @@ async function handleLogin(e) {
 async function checkAuthState() {
   try {
     await waitForFirebase();
-    firebase.auth().onAuthStateChanged((user) => {
+    firebase.auth().onAuthStateChanged(async (user) => {
       if (user) {
-        window.location.href = 'chat.html';
+        const uid = user.uid;
+        const userDoc = await firebase.firestore().collection('users').doc(uid).get();
+
+        if (userDoc.exists && userDoc.data().onboarding_complete) {
+          window.location.href = 'chat.html';
+        } else {
+          window.location.href = 'onboarding.html';
+        }
       }
     });
   } catch (err) {
