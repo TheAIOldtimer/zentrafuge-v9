@@ -134,6 +134,34 @@ def get_authorized_user():
     return user_info, None
 
 
+def run_cael_completion(message: str):
+    """
+    Shared OpenAI chat call for Cael.
+    Returns reply text or raises an exception.
+    """
+    client = init_openai()
+    if not client:
+        raise RuntimeError("AI unavailable")
+
+    completion = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are Cael, an emotionally intelligent AI companion for "
+                    "UK veterans. Be calm, grounded, and honest. Never make "
+                    "clinical claims or promise to replace professional help."
+                ),
+            },
+            {"role": "user", "content": message},
+        ],
+        max_tokens=500,
+        temperature=0.7,
+    )
+    return completion.choices[0].message.content
+
+
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
@@ -147,8 +175,9 @@ def root():
         "timestamp": datetime.utcnow().isoformat(),
         "endpoints": {
             "health": "/health",
+            "index_chat": "/index",
             "auth_verify": "/auth/verify",
-            "chat": "/chat/message",
+            "chat_legacy": "/chat/message",
             "user_profile": "/user/profile",
         },
     })
@@ -221,6 +250,7 @@ def user_profile():
         "email": user_info.get("email"),
         "full_name": data.get("name", ""),
         "is_veteran": data.get("is_veteran", False),
+        "country": data.get("country", "UK"),  # future-proof for intl rollout
         "marketing_opt_in": data.get("marketing_opt_in", False),
         "registration_date": data.get(
             "registration_date",
@@ -234,55 +264,48 @@ def user_profile():
     return jsonify({"success": True, "profile": profile})
 
 
-@app.route("/chat/message", methods=["POST"])
-def chat_message():
+# -------------------------------------------------------------------------
+# New: /index – main chat endpoint with {message} -> {response} contract
+# -------------------------------------------------------------------------
+
+@app.route("/index", methods=["POST"])
+def index_chat():
     """
-    Current chat endpoint (will later be mirrored by /index for the front-end
-    contract: { "message": "User says..." } -> { "response": "Cael replies..." }).
+    Main chat endpoint for the frontend.
+
+    Request:
+        { "message": "User says..." }
+
+    Response:
+        { "response": "Cael replies..." }
+
+    (Auth required via Firebase ID token in Authorization: Bearer <token>)
     """
     user_info, error_response = get_authorized_user()
     if error_response:
         return error_response
 
     user_id = user_info["uid"]
+    db_local = init_firebase()
+    if not db_local:
+        return jsonify({"error": "Database unavailable"}), 503
 
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     if not message:
         return jsonify({"error": "Message required"}), 400
 
-    db_local = init_firebase()
-    if not db_local:
-        return jsonify({"error": "Database unavailable"}), 503
-
-    client = init_openai()
-    if not client:
-        return jsonify({"error": "AI unavailable"}), 503
-
-    # Save user message (plaintext for now – encryption will be added next)
+    # Log user message (plaintext for now – encryption comes later)
     db_local.collection("messages").add({
         "user_id": user_id,
         "role": "user",
         "content": message,
         "timestamp": datetime.utcnow().isoformat(),
+        "via": "index",
     })
 
     try:
-        completion = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are Cael, an emotionally intelligent AI "
-                               "companion for UK veterans. Be calm, grounded, "
-                               "and never make clinical claims."
-                },
-                {"role": "user", "content": message},
-            ],
-            max_tokens=500,
-            temperature=0.7,
-        )
-        reply = completion.choices[0].message.content
+        reply = run_cael_completion(message)
 
         db_local.collection("messages").add({
             "user_id": user_id,
@@ -290,12 +313,69 @@ def chat_message():
             "content": reply,
             "timestamp": datetime.utcnow().isoformat(),
             "model": "gpt-3.5-turbo",
+            "via": "index",
+        })
+
+        # IMPORTANT: contract: { "response": "Cael replies..." }
+        return jsonify({"response": reply})
+
+    except Exception as e:
+        logger.error(f"OpenAI error in /index: {e}")
+        fallback = (
+            "Cael is having trouble responding right now. "
+            "Please try again soon."
+        )
+        return jsonify({"response": fallback})
+
+
+# -------------------------------------------------------------------------
+# Legacy / debugging endpoint: /chat/message
+# -------------------------------------------------------------------------
+
+@app.route("/chat/message", methods=["POST"])
+def chat_message():
+    """
+    Legacy chat endpoint.
+    Same behaviour as /index, but keeps the older { success, response } shape.
+    """
+    user_info, error_response = get_authorized_user()
+    if error_response:
+        return error_response
+
+    user_id = user_info["uid"]
+    db_local = init_firebase()
+    if not db_local:
+        return jsonify({"error": "Database unavailable"}), 503
+
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"error": "Message required"}), 400
+
+    db_local.collection("messages").add({
+        "user_id": user_id,
+        "role": "user",
+        "content": message,
+        "timestamp": datetime.utcnow().isoformat(),
+        "via": "chat.message",
+    })
+
+    try:
+        reply = run_cael_completion(message)
+
+        db_local.collection("messages").add({
+            "user_id": user_id,
+            "role": "assistant",
+            "content": reply,
+            "timestamp": datetime.utcnow().isoformat(),
+            "model": "gpt-3.5-turbo",
+            "via": "chat.message",
         })
 
         return jsonify({"success": True, "response": reply})
 
     except Exception as e:
-        logger.error(f"OpenAI error: {e}")
+        logger.error(f"OpenAI error in /chat/message: {e}")
         fallback = (
             "Cael is having trouble responding right now. "
             "Please try again soon."
