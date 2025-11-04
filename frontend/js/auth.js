@@ -1,4 +1,6 @@
-// js/auth.js - Authentication Logic (Zentrafuge v9)
+// frontend/js/auth.js — Zentrafuge v9 (UK Veterans Edition)
+// Using Firebase v8 global SDK
+// Handles registration + login via Firebase Auth and your Flask backend
 
 import Config from './config.js';
 import {
@@ -17,9 +19,10 @@ export async function registerUser(formData) {
     showLoading('loading', true);
     showMessage('message', '');
 
+    // Wait until Firebase SDK has loaded
     await waitForFirebase();
 
-    // Create user in Firebase Auth
+    // ✅ Create user in Firebase Auth
     const userCredential = await firebase
       .auth()
       .createUserWithEmailAndPassword(formData.email, formData.password);
@@ -32,7 +35,7 @@ export async function registerUser(formData) {
     // ✅ Update Firebase user profile with display name
     await user.updateProfile({ displayName: formData.name });
 
-    // Create user profile in your backend
+    // ✅ Create profile in your backend Firestore via API
     const token = await user.getIdToken();
     try {
       await createUserProfile(token, {
@@ -50,7 +53,7 @@ export async function registerUser(formData) {
       );
     }
 
-    // ✅ Notify user and redirect
+    // ✅ Notify user and redirect to login
     showMessage(
       'message',
       'Account created! Please check your email and verify before logging in.',
@@ -78,16 +81,21 @@ export async function loginUser(email, password) {
 
     await waitForFirebase();
 
+    // ✅ Sign in with Firebase
     const userCredential = await firebase
       .auth()
       .signInWithEmailAndPassword(email, password);
 
     const user = userCredential.user;
 
-    // ✅ Enforce email verification
+    // ✅ Enforce email verification before proceeding
     if (!user.emailVerified) {
       await firebase.auth().signOut();
-      showMessage('message', 'Please verify your email before logging in.', true);
+      showMessage(
+        'message',
+        'Please verify your email before logging in.',
+        true
+      );
       return;
     }
 
