@@ -84,17 +84,21 @@ def init_openai():
     try:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is not set")
+            logger.error("OPENAI_API_KEY environment variable is not set")
+            return None
 
-        # OpenAI v1.3.0 client
-        openai_client = OpenAI(api_key=api_key)
+        # Ensure the env var is visible to the SDK
+        os.environ["OPENAI_API_KEY"] = api_key
+
+        openai_client = OpenAI()
         logger.info(
-            "OpenAI client initialized in %.2f seconds",
+            "✅ OpenAI client initialized in %.2f seconds",
             time.time() - start_time
         )
         return openai_client
+
     except Exception as e:
-        logger.error(f"OpenAI initialization failed: {e}")
+        logger.error(f"❌ OpenAI initialization failed: {e}")
         openai_client = None
         return None
 
