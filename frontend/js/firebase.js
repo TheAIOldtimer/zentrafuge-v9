@@ -5,13 +5,12 @@
 
 // Your Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyA0UGTSall_tMMIQWd7PBrjM-xIibiAQ-8",
-    authDomain: "zentrafuge-v9.firebaseapp.com",
-    projectId: "zentrafuge-v9",
-    storageBucket: "zentrafuge-v9.appspot.com",
-    messagingSenderId: "188961704770",
-    appId: "1:188961704770:web:91de60d7aa0c696c52d6db",
-    measurementId: "G-X5YXZMLNW4"
+  apiKey: "AIzaSyBGFZ20q4PagwvhvEuQIoIAb2_9w-Lt3b0",
+  authDomain: "zentrafuge-v9-uk-veterans.firebaseapp.com",
+  projectId: "zentrafuge-v9-uk-veterans",
+  storageBucket: "zentrafuge-v9-uk-veterans.appspot.com", // ✅ correct suffix
+  messagingSenderId: "231055123869",
+  appId: "1:231055123869:web:2185ee6131bb3044ba7b74"
 };
 
 // Initialize Firebase
