@@ -4,22 +4,9 @@ import Config from './config.js';
 import { sendChatMessage } from './api.js';
 import { waitForFirebase } from './utils.js';
 
-async function checkUserProfile() {
-  await waitForFirebase();
-  
-  const user = firebase.auth().currentUser;
-  if (!user) {
-    window.location.href = 'index.html'; // Not logged in
-    return;
-  }
-
-  const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
-  if (!userDoc.exists || !userDoc.data().onboarding_complete) {
-    window.location.href = 'onboarding.html'; // Redirect if not onboarded
-  }
-}
-
-checkUserProfile();
+// DON'T check profile immediately - wait for proper auth state
+// async function checkUserProfile() { ... }
+// checkUserProfile(); ← REMOVE THIS LINE
 
 let currentUser = null;
 let chatContainer = null;
@@ -40,40 +27,55 @@ async function initializeChat() {
     document.getElementById('chat-form').addEventListener('submit', handleSendMessage);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     
-    // Check authentication
+    // Check authentication (this handles redirects properly)
     await checkAuthentication();
     
-    // Show welcome message
-    showWelcomeMessage();
-    
     // Auto-focus input
-    messageInput.focus();
+    if (messageInput) messageInput.focus();
 }
 
 async function checkAuthentication() {
     try {
         await waitForFirebase();
         
-        // Use your global firebase auth
-        firebase.auth().onAuthStateChanged((user) => {
-            if (user) {
-                currentUser = user;
-                document.getElementById('user-name').textContent = user.displayName || user.email;
-                
-                // Log user info for debugging
-                console.log('👤 Chat user:', {
-                    email: user.email,
-                    verified: user.emailVerified,
-                    name: user.displayName
-                });
-            } else {
-                // Redirect to login if not authenticated
-                console.log('❌ No authenticated user, redirecting to login');
-                window.location.href = '../index.html';
-            }
+        // Use a Promise to wait for initial auth state
+        const user = await new Promise((resolve) => {
+            const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
+                unsubscribe(); // Stop listening after first check
+                resolve(user);
+            });
         });
+        
+        if (!user) {
+            console.log('❌ No authenticated user, redirecting to login');
+            window.location.href = '../index.html';
+            return;
+        }
+        
+        // Check if user has completed onboarding
+        const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
+        
+        if (!userDoc.exists || !userDoc.data().onboarding_complete) {
+            console.log('⚠️ User not onboarded, redirecting...');
+            window.location.href = '../onboarding.html';
+            return;
+        }
+        
+        // User is authenticated and onboarded
+        currentUser = user;
+        document.getElementById('user-name').textContent = user.displayName || user.email;
+        
+        console.log('✅ Chat ready for user:', {
+            email: user.email,
+            verified: user.emailVerified,
+            name: user.displayName
+        });
+        
+        // NOW show welcome message after everything is ready
+        showWelcomeMessage();
+        
     } catch (error) {
-        console.error('Authentication check failed:', error);
+        console.error('❌ Authentication check failed:', error);
         window.location.href = '../index.html';
     }
 }
