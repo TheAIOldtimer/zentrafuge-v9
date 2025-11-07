@@ -107,7 +107,7 @@ export async function loginUser(email, password) {
       // ✅ Chat page lives at /html/chat.html
       const chatRoute =
         (Config && Config.ROUTES && Config.ROUTES.chat) || 'html/chat.html';
-      window.location.href = chatRoute;
+      window.location.replace('/html/chat.html');
     }, Config.REDIRECT_DELAY || 2000);
   } catch (error) {
     console.error('Login error:', error);
