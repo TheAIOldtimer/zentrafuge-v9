@@ -110,40 +110,15 @@
             try {
                 console.log('📧 Verifying email...');
                 
+                // Get info about the action code first
+                const info = await firebase.auth().checkActionCode(actionCode);
+                const email = info.data.email;
+                console.log('📧 Email being verified:', email);
+                
                 // Apply the action code (verifies the email)
                 await firebase.auth().applyActionCode(actionCode);
                 
                 console.log('✅ Email verified successfully!');
-                
-               // After verification, try to get the user's email from the action code
-// Then sign them in automatically
-let user = firebase.auth().currentUser;
-
-if (!user) {
-    // User isn't logged in, get email from action code
-    console.log('👤 User not logged in, checking action code for email...');
-    
-    try {
-        const info = await firebase.auth().checkActionCode(actionCode);
-        const email = info.data.email;
-        console.log('📧 Email from action code:', email);
-        
-        // We can't sign them in automatically (we don't have their password)
-        // So we need to tell them to sign in
-        messageDiv.innerHTML += `
-            <div style="margin-top: 1rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px;">
-                <strong>Next Step:</strong><br>
-                Please sign in with your email (${email}) to continue.
-            </div>
-        `;
-    } catch (error) {
-        console.error('❌ Could not get email from action code:', error);
-    }
-} else {
-    // User is logged in, reload to get verified status
-    await user.reload();
-    console.log('👤 User reloaded, verified:', user.emailVerified);
-}
                 
                 // Success!
                 loading.style.display = 'none';
@@ -151,52 +126,19 @@ if (!user) {
                 messageDiv.innerHTML = `
                     <div class="message-success">
                         <strong>Success!</strong><br>
-                        Your email has been verified successfully.
+                        Your email (${email}) has been verified successfully.
+                    </div>
+                    <div style="margin-top: 1.5rem; padding: 1rem; background: #f0f9ff; border: 1px solid #3b82f6; border-radius: 6px;">
+                        <strong>Next Step:</strong><br>
+                        Please sign in with your email to complete your setup.
                     </div>
                 `;
                 
-               // Check onboarding status
-if (user) {
-    console.log('👤 User is logged in:', user.email);
-    
-    try {
-        const userDoc = await firebase
-            .firestore()
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        
-        if (userDoc.exists && userDoc.data().onboarding_complete) {
-            // Already completed onboarding - go to chat
-            console.log('✅ Onboarding complete, going to chat');
-            continueBtn.textContent = 'Continue to Chat';
-            continueBtn.onclick = () => {
-                window.location.href = '/html/chat.html';
-            };
-        } else {
-            // Need to complete onboarding
-            console.log('⚠️ Onboarding incomplete, going to onboarding');
-            continueBtn.textContent = 'Complete Setup';
-            continueBtn.onclick = () => {
-                window.location.href = '/html/onboarding.html';
-            };
-        }
-    } catch (firestoreError) {
-        console.error('❌ Error checking onboarding:', firestoreError);
-        // Default to onboarding if we can't check
-        continueBtn.textContent = 'Complete Setup';
-        continueBtn.onclick = () => {
-            window.location.href = '/html/onboarding.html';
-        };
-    }
-} else {
-    // Not logged in - need to sign in first
-    console.log('❌ User not logged in, redirecting to login');
-    continueBtn.textContent = 'Sign In to Continue';
-    continueBtn.onclick = () => {
-        window.location.href = '/';
-    };
-}
+                // Always send to login after verification
+                continueBtn.textContent = 'Sign In';
+                continueBtn.onclick = () => {
+                    window.location.href = '/';
+                };
                 
                 actionButtons.style.display = 'block';
                 
