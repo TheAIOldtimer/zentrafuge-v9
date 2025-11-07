@@ -1,15 +1,13 @@
+// frontend/js/config.js
+
 const Config = {
   API_BASE: 'https://zentrafuge-v9.onrender.com',
-  FIREBASE_TIMEOUT: 10000,
-  REDIRECT_DELAY: 2000,
-  
-  // Firebase config will be loaded from firebase.js
   ROUTES: {
-    login: 'index.html',
-    register: 'register.html', 
-    chat: 'chat.html',
-    emailVerified: 'email-verified.html'
-  }
+    login: 'index.html',       // root
+    register: 'html/register.html',
+    chat: 'html/chat.html',    // 🔥 important
+  },
+  REDIRECT_DELAY: 2000,
 };
 
 export default Config;
