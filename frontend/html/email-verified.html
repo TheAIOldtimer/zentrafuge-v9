@@ -55,78 +55,65 @@
         </div>
     </div>
 
-    <!-- Firebase Init -->
+   <!-- Firebase Init -->
     <script src="../js/firebase-init.js"></script>
     
     <script>
-        // Wait for Firebase to be ready
         async function checkOnboardingStatus() {
             try {
-                // Wait for Firebase to initialize
-                if (typeof firebase === 'undefined') {
-                    throw new Error('Firebase not loaded');
-                }
+                const loading = document.getElementById('loading');
+                const content = document.getElementById('content');
+                const continueBtn = document.getElementById('continue-btn');
                 
-                // Check if user is authenticated
+                // Wait for Firebase auth
                 firebase.auth().onAuthStateChanged(async (user) => {
-                    if (user) {
-                        console.log('User authenticated:', user.email);
+                    if (!user) {
+                        console.log('❌ No user, redirecting to login');
+                        window.location.href = '/';
+                        return;
+                    }
+                    
+                    console.log('✅ User verified:', user.email);
+                    
+                    try {
+                        // Check if user has completed onboarding
+                        const userDoc = await firebase
+                            .firestore()
+                            .collection('users')
+                            .doc(user.uid)
+                            .get();
                         
-                        try {
-                            // Check onboarding status in Firestore
-                            const userDoc = await firebase
-                                .firestore()
-                                .collection('users')
-                                .doc(user.uid)
-                                .get();
-                            
-                            const continueBtn = document.getElementById('continue-btn');
-                            const loading = document.getElementById('loading');
-                            const content = document.getElementById('content');
-                            
-                            loading.style.display = 'none';
-                            content.style.display = 'block';
-                            
-                            if (userDoc.exists && userDoc.data().onboarding_complete) {
-                                // User has completed onboarding - go to login
-                                console.log('Onboarding complete - redirecting to login');
-                                continueBtn.textContent = 'Continue to Login';
-                                continueBtn.onclick = () => {
-                                    window.location.href = '/';
-                                };
-                            } else {
-                                // User needs to complete onboarding
-                                console.log('Onboarding incomplete - redirecting to onboarding');
-                                continueBtn.textContent = 'Complete Setup';
-                                continueBtn.onclick = () => {
-                                    window.location.href = '/html/onboarding.html';
-                                };
-                            }
-                        } catch (firestoreError) {
-                            console.error('Error checking onboarding status:', firestoreError);
-                            // Default to onboarding if we can't check
-                            const continueBtn = document.getElementById('continue-btn');
-                            const loading = document.getElementById('loading');
-                            const content = document.getElementById('content');
-                            
-                            loading.style.display = 'none';
-                            content.style.display = 'block';
-                            
+                        loading.style.display = 'none';
+                        content.style.display = 'block';
+                        
+                        if (userDoc.exists && userDoc.data().onboarding_complete) {
+                            // User completed onboarding - go to chat
+                            console.log('✅ Onboarding complete, going to chat');
+                            continueBtn.textContent = 'Continue to Chat';
+                            continueBtn.onclick = () => {
+                                window.location.href = '/html/chat.html';
+                            };
+                        } else {
+                            // User needs to complete onboarding
+                            console.log('⚠️ Onboarding incomplete, going to onboarding');
                             continueBtn.textContent = 'Complete Setup';
                             continueBtn.onclick = () => {
                                 window.location.href = '/html/onboarding.html';
                             };
                         }
-                    } else {
-                        // Not authenticated - go to login
-                        console.log('User not authenticated - redirecting to login');
-                        window.location.href = '/';
+                    } catch (firestoreError) {
+                        console.error('❌ Firestore error:', firestoreError);
+                        // Default to onboarding on error
+                        loading.style.display = 'none';
+                        content.style.display = 'block';
+                        continueBtn.textContent = 'Complete Setup';
+                        continueBtn.onclick = () => {
+                            window.location.href = '/html/onboarding.html';
+                        };
                     }
                 });
-                
             } catch (error) {
-                console.error('Error:', error);
-                // Fallback - go to login
+                console.error('❌ Check failed:', error);
                 setTimeout(() => {
                     window.location.href = '/';
                 }, 2000);
