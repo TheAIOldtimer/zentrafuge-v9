@@ -115,14 +115,35 @@
                 
                 console.log('✅ Email verified successfully!');
                 
-                // Get current user
-                const user = firebase.auth().currentUser;
-                
-                if (user) {
-                    // User is logged in, reload to get verified status
-                    await user.reload();
-                    console.log('👤 User reloaded, verified:', user.emailVerified);
-                }
+               // After verification, try to get the user's email from the action code
+// Then sign them in automatically
+let user = firebase.auth().currentUser;
+
+if (!user) {
+    // User isn't logged in, get email from action code
+    console.log('👤 User not logged in, checking action code for email...');
+    
+    try {
+        const info = await firebase.auth().checkActionCode(actionCode);
+        const email = info.data.email;
+        console.log('📧 Email from action code:', email);
+        
+        // We can't sign them in automatically (we don't have their password)
+        // So we need to tell them to sign in
+        messageDiv.innerHTML += `
+            <div style="margin-top: 1rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px;">
+                <strong>Next Step:</strong><br>
+                Please sign in with your email (${email}) to continue.
+            </div>
+        `;
+    } catch (error) {
+        console.error('❌ Could not get email from action code:', error);
+    }
+} else {
+    // User is logged in, reload to get verified status
+    await user.reload();
+    console.log('👤 User reloaded, verified:', user.emailVerified);
+}
                 
                 // Success!
                 loading.style.display = 'none';
