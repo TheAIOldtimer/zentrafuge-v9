@@ -1,13 +1,8 @@
 [build]
-  base = "frontend"
   publish = "frontend"
-  command = ""  # no build step, just static files
 
-[functions]
-  directory = "netlify/functions"
-
-# Optional: send "/" to the login page. Do NOT use a catch-all "/*" here.
 [[redirects]]
-  from = "/"
-  to = "/index.html"
+  from = "/html/*"
+  to = "/html/:splat"
   status = 200
+  force = true
