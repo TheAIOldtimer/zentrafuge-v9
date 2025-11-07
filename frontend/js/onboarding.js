@@ -1,56 +1,81 @@
-// js/onboarding.js - Enhanced onboarding functionality with veteran support
+// frontend/js/onboarding.js - Complete onboarding flow
 
 import Config from './config.js';
 import { showMessage, showLoading } from './utils.js';
 
-// Onboarding state
-let currentOnboardingStep = 0;
-const totalOnboardingSteps = 6; // 0-5 (Welcome, Name, Veteran, Communication, Emotional, Life Context, Completion)
+let currentStep = 0;
+const totalSteps = 6;
 
-export function initializeOnboarding() {
-    currentOnboardingStep = 0;
-    updateOnboardingProgress();
-    showOnboardingStep(0);
+document.addEventListener('DOMContentLoaded', () => {
+    initializeOnboarding();
+});
+
+function initializeOnboarding() {
+    console.log('🎯 Initializing onboarding...');
     
-    // Setup onboarding event listeners
-    setupOnboardingListeners();
+    // Check authentication
+    checkAuth();
+    
+    // Setup navigation buttons
+    setupNavigationButtons();
+    
+    // Setup name suggestion buttons
+    setupNameButtons();
+    
+    // Setup veteran checkbox toggle
+    setupVeteranToggle();
+    
+    // Setup completion button
+    setupCompletionButton();
+    
+    // Show first step
+    showStep(0);
 }
 
-function setupOnboardingListeners() {
-    // Name suggestion buttons
-    const nameButtons = document.querySelectorAll('.name-btn');
-    nameButtons.forEach(btn => {
+async function checkAuth() {
+    const user = firebase.auth().currentUser;
+    if (!user) {
+        console.log('❌ No user found, redirecting to login');
+        window.location.href = '/';
+    }
+}
+
+function setupNavigationButtons() {
+    // Next buttons
+    document.querySelectorAll('.onboarding-next').forEach(btn => {
         btn.addEventListener('click', () => {
-            setCaelName(btn.textContent);
+            if (currentStep < totalSteps - 1) {
+                currentStep++;
+                showStep(currentStep);
+                updateProgress();
+            }
         });
     });
     
-    // Navigation buttons
-    const nextButtons = document.querySelectorAll('.onboarding-next');
-    nextButtons.forEach(btn => {
-        btn.addEventListener('click', nextOnboardingStep);
+    // Previous buttons
+    document.querySelectorAll('.onboarding-prev').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (currentStep > 0) {
+                currentStep--;
+                showStep(currentStep);
+                updateProgress();
+            }
+        });
     });
-    
-    const prevButtons = document.querySelectorAll('.onboarding-prev');
-    prevButtons.forEach(btn => {
-        btn.addEventListener('click', previousOnboardingStep);
-    });
-    
-    // Completion button
-    const completeButton = document.getElementById('complete-onboarding');
-    if (completeButton) {
-        completeButton.addEventListener('click', completeVeteranOnboarding);
-    }
-    
-    // Enter chat button
-    const enterChatButton = document.getElementById('enter-chat');
-    if (enterChatButton) {
-        enterChatButton.addEventListener('click', enterChat);
-    }
+}
 
-    // Veteran checkbox toggle
+function setupNameButtons() {
+    document.querySelectorAll('.name-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('ai_name').value = btn.textContent;
+        });
+    });
+}
+
+function setupVeteranToggle() {
     const veteranCheckbox = document.getElementById('veteran');
     const veteranDetails = document.getElementById('veteran-details');
+    
     if (veteranCheckbox && veteranDetails) {
         veteranCheckbox.addEventListener('change', () => {
             veteranDetails.style.display = veteranCheckbox.checked ? 'block' : 'none';
@@ -58,73 +83,68 @@ function setupOnboardingListeners() {
     }
 }
 
-function nextOnboardingStep() {
-    if (currentOnboardingStep < totalOnboardingSteps - 1) {
-        currentOnboardingStep++;
-        updateOnboardingProgress();
-        showOnboardingStep(currentOnboardingStep);
+function setupCompletionButton() {
+    const completeBtn = document.getElementById('complete-onboarding');
+    if (completeBtn) {
+        completeBtn.addEventListener('click', completeOnboarding);
+    }
+    
+    const enterChatBtn = document.getElementById('enter-chat');
+    if (enterChatBtn) {
+        enterChatBtn.addEventListener('click', () => {
+            window.location.href = '/html/chat.html';
+        });
     }
 }
 
-function previousOnboardingStep() {
-    if (currentOnboardingStep > 0) {
-        currentOnboardingStep--;
-        updateOnboardingProgress();
-        showOnboardingStep(currentOnboardingStep);
-    }
-}
-
-function showOnboardingStep(step) {
+function showStep(step) {
     // Hide all steps
-    for (let i = 0; i < totalOnboardingSteps; i++) {
-        const stepElement = document.getElementById(i === 2 ? 'onboarding-step-veteran' : `onboarding-step-${i}`);
+    for (let i = 0; i < totalSteps; i++) {
+        const stepElement = document.getElementById(`onboarding-step-${i}`);
         if (stepElement) {
             stepElement.style.display = 'none';
         }
     }
     
     // Show current step
-    const currentStepElement = document.getElementById(step === 2 ? 'onboarding-step-veteran' : `onboarding-step-${step}`);
+    const currentStepElement = document.getElementById(`onboarding-step-${step}`);
     if (currentStepElement) {
         currentStepElement.style.display = 'block';
     }
     
-    // Update progress bar
-    updateProgressBar();
+    console.log(`📍 Showing step ${step}`);
 }
 
-function updateOnboardingProgress() {
-    const progressDots = document.querySelectorAll('.progress-dot');
-    progressDots.forEach((dot, index) => {
-        dot.classList.remove('active', 'completed');
-        if (index === currentOnboardingStep) {
-            dot.classList.add('active');
-        } else if (index < currentOnboardingStep) {
-            dot.classList.add('completed');
-        }
-    });
-}
-
-function updateProgressBar() {
-    const progressFill = document.querySelector('.progress-fill');
+function updateProgress() {
+    const progressFill = document.getElementById('progress-fill');
     if (progressFill) {
-        const progress = ((currentOnboardingStep + 1) / totalOnboardingSteps) * 100;
-        progressFill.style.width = `${progress}%`;
+        const percentage = ((currentStep + 1) / totalSteps) * 100;
+        progressFill.style.width = `${percentage}%`;
     }
 }
 
-function setCaelName(name) {
-    const nameInput = document.getElementById('ai_name');
-    if (nameInput) {
-        nameInput.value = name;
-    }
+function getSelectedRadioValue(name) {
+    const selected = document.querySelector(`input[name="${name}"]:checked`);
+    return selected ? selected.value : null;
 }
 
-async function completeVeteranOnboarding() {
+function getSelectedCheckboxValues(name) {
+    const selected = document.querySelectorAll(`input[name="${name}"]:checked`);
+    return Array.from(selected).map(cb => cb.value);
+}
+
+async function completeOnboarding() {
     try {
         showLoading('onboarding-loading', true);
+        showMessage('onboarding-message', '');
         
-        // Collect comprehensive onboarding data
+        // Get current user
+        const user = firebase.auth().currentUser;
+        if (!user) {
+            throw new Error('User not authenticated');
+        }
+        
+        // Collect all onboarding data
         const onboardingData = {
             cael_name: document.getElementById('ai_name')?.value || 'Cael',
             communication_style: getSelectedRadioValue('communication_style') || 'balanced',
@@ -139,23 +159,19 @@ async function completeVeteranOnboarding() {
                 service_years: document.getElementById('service_years')?.value || null,
                 unit_served: document.getElementById('unit_served')?.value || null,
                 deployments: document.getElementById('deployments')?.value || null,
-                verification_status: 'pending' // Will be verified by backend
+                verification_status: 'pending'
             },
-            preferences: {
-                response_length: 'balanced',
-                emotional_support: 'moderate',
-                learning_speed: 'moderate'
-            },
-            onboarding_version: 'v9_enhanced',
-            personality_profile: generatePersonalityProfile()
+            personality_profile: {
+                communication_preference: getSelectedRadioValue('communication_style'),
+                emotional_processing: getSelectedRadioValue('emotional_pacing'),
+                meaning_sources: getSelectedCheckboxValues('sources_of_meaning'),
+                preferred_support: getSelectedCheckboxValues('effective_support')
+            }
         };
         
-        // Get current user token
-        const user = firebase.auth().currentUser;
-        if (!user) {
-            throw new Error('User not authenticated');
-        }
+        console.log('📤 Sending onboarding data:', onboardingData);
         
+        // Get Firebase token
         const token = await user.getIdToken();
         
         // Send to backend
@@ -168,80 +184,25 @@ async function completeVeteranOnboarding() {
             body: JSON.stringify(onboardingData)
         });
         
-        if (response.ok) {
-            const responseData = await response.json();
-            console.log('✅ Onboarding completed successfully:', responseData);
-            
-            // If veteran verification is approved, initialize veteran system
-            if (responseData.veteran_verified) {
-                const veteranSystem = await initializeVeteranSystem();
-                await veteranSystem.verifyVeteranStatus(user.uid, token);
-            }
-            
-            // Store companion name globally
-            window.companionName = onboardingData.cael_name;
-            
-            // Show completion step
-            showOnboardingStep(5);
-            
-            // Show success message
-            showMessage('onboarding-message', 'Setup completed successfully! Welcome to Zentrafuge.', false);
-            
-        } else {
+        if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to complete onboarding');
         }
         
+        const result = await response.json();
+        console.log('✅ Onboarding completed:', result);
+        
+        // Show completion step
+        currentStep = 5;
+        showStep(5);
+        updateProgress();
+        
+        showMessage('onboarding-message', 'Setup completed successfully!', false);
+        
     } catch (error) {
-        console.error('❌ Onboarding completion error:', error);
-        showMessage('onboarding-message', 'Failed to complete setup. Please try again.', true);
+        console.error('❌ Onboarding error:', error);
+        showMessage('onboarding-message', `Failed to complete setup: ${error.message}`, true);
     } finally {
         showLoading('onboarding-loading', false);
     }
-}
-
-function getSelectedRadioValue(name) {
-    const selected = document.querySelector(`input[name="${name}"]:checked`);
-    return selected ? selected.value : null;
-}
-
-function getSelectedCheckboxValues(name) {
-    const selected = document.querySelectorAll(`input[name="${name}"]:checked`);
-    return Array.from(selected).map(cb => cb.value);
-}
-
-function generatePersonalityProfile() {
-    // Generate a personality profile based on user selections
-    const communicationStyle = getSelectedRadioValue('communication_style');
-    const emotionalPacing = getSelectedRadioValue('emotional_pacing');
-    const meaningSources = getSelectedCheckboxValues('sources_of_meaning');
-    const supportTypes = getSelectedCheckboxValues('effective_support');
-    
-    return {
-        communication_preference: communicationStyle,
-        emotional_processing: emotionalPacing,
-        meaning_sources: meaningSources,
-        preferred_support: supportTypes,
-        profile_completeness: calculateProfileCompleteness(),
-        generated_at: new Date().toISOString()
-    };
-}
-
-function calculateProfileCompleteness() {
-    const fields = [
-        getSelectedRadioValue('communication_style'),
-        getSelectedRadioValue('emotional_pacing'),
-        document.getElementById('life_chapter')?.value,
-        getSelectedCheckboxValues('sources_of_meaning').length > 0,
-        getSelectedCheckboxValues('effective_support').length > 0,
-        document.getElementById('veteran')?.checked
-    ];
-    
-    const completedFields = fields.filter(field => field && field !== '').length;
-    return Math.round((completedFields / fields.length) * 100);
-}
-
-function enterChat() {
-    // Redirect to chat page
-    window.location.href = 'chat.html';
 }
