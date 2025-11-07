@@ -134,34 +134,48 @@
                     </div>
                 `;
                 
-                // Check onboarding status
-                if (user) {
-                    const userDoc = await firebase
-                        .firestore()
-                        .collection('users')
-                        .doc(user.uid)
-                        .get();
-                    
-                    if (userDoc.exists && userDoc.data().onboarding_complete) {
-                        // Already completed onboarding
-                        continueBtn.textContent = 'Continue to Chat';
-                        continueBtn.onclick = () => {
-                            window.location.href = '/html/chat.html';
-                        };
-                    } else {
-                        // Need to complete onboarding
-                        continueBtn.textContent = 'Complete Setup';
-                        continueBtn.onclick = () => {
-                            window.location.href = '/html/onboarding.html';
-                        };
-                    }
-                } else {
-                    // Not logged in, go to login
-                    continueBtn.textContent = 'Sign In';
-                    continueBtn.onclick = () => {
-                        window.location.href = '/';
-                    };
-                }
+               // Check onboarding status
+if (user) {
+    console.log('👤 User is logged in:', user.email);
+    
+    try {
+        const userDoc = await firebase
+            .firestore()
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        
+        if (userDoc.exists && userDoc.data().onboarding_complete) {
+            // Already completed onboarding - go to chat
+            console.log('✅ Onboarding complete, going to chat');
+            continueBtn.textContent = 'Continue to Chat';
+            continueBtn.onclick = () => {
+                window.location.href = '/html/chat.html';
+            };
+        } else {
+            // Need to complete onboarding
+            console.log('⚠️ Onboarding incomplete, going to onboarding');
+            continueBtn.textContent = 'Complete Setup';
+            continueBtn.onclick = () => {
+                window.location.href = '/html/onboarding.html';
+            };
+        }
+    } catch (firestoreError) {
+        console.error('❌ Error checking onboarding:', firestoreError);
+        // Default to onboarding if we can't check
+        continueBtn.textContent = 'Complete Setup';
+        continueBtn.onclick = () => {
+            window.location.href = '/html/onboarding.html';
+        };
+    }
+} else {
+    // Not logged in - need to sign in first
+    console.log('❌ User not logged in, redirecting to login');
+    continueBtn.textContent = 'Sign In to Continue';
+    continueBtn.onclick = () => {
+        window.location.href = '/';
+    };
+}
                 
                 actionButtons.style.display = 'block';
                 
