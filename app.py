@@ -263,6 +263,77 @@ def user_profile():
     db_local.collection("users").document(user_id).set(profile)
     return jsonify({"success": True, "profile": profile})
 
+@app.route("/user/onboarding", methods=["POST"])
+def user_onboarding():
+    """
+    Complete user onboarding process and save preferences
+    """
+    user_info, error_response = get_authorized_user()
+    if error_response:
+        return error_response
+
+    user_id = user_info["uid"]
+    db_local = init_firebase()
+    if not db_local:
+        return jsonify({"error": "Database unavailable"}), 503
+
+    data = request.get_json(silent=True) or {}
+    
+    # Build comprehensive onboarding profile
+    onboarding_data = {
+        "user_id": user_id,
+        "email": user_info.get("email"),
+        "onboarding_complete": True,
+        "cael_initialized": True,
+        "completed_at": datetime.utcnow().isoformat(),
+        
+        # Companion settings
+        "companion_name": data.get("cael_name", "Cael"),
+        
+        # Communication preferences
+        "communication_style": data.get("communication_style", "balanced"),
+        "emotional_pacing": data.get("emotional_pacing", "varies_situation"),
+        
+        # Life context
+        "life_chapter": data.get("life_chapter", ""),
+        "sources_of_meaning": data.get("sources_of_meaning", []),
+        "effective_support": data.get("effective_support", []),
+        
+        # Veteran profile (if applicable)
+        "veteran_profile": data.get("veteran_profile", {
+            "is_veteran": False,
+            "service_branch": None,
+            "service_country": None,
+            "service_years": None,
+            "unit_served": None,
+            "deployments": None,
+            "verification_status": "not_applicable"
+        }),
+        
+        # System metadata
+        "onboarding_version": "v9_enhanced",
+        "personality_profile": data.get("personality_profile", {}),
+    }
+    
+    try:
+        # Save to Firestore
+        db_local.collection("users").document(user_id).set(
+            onboarding_data, 
+            merge=True  # Merge with existing profile data
+        )
+        
+        logger.info(f"✅ Onboarding completed for user {user_id}")
+        
+        return jsonify({
+            "success": True,
+            "message": "Onboarding completed successfully",
+            "veteran_verified": onboarding_data["veteran_profile"].get("is_veteran", False),
+            "companion_name": onboarding_data["companion_name"]
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Onboarding save failed: {e}")
+        return jsonify({"error": "Failed to save onboarding data"}), 500
 
 # -------------------------------------------------------------------------
 # New: /index – main chat endpoint with {message} -> {response} contract
