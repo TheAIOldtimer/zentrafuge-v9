@@ -61,9 +61,8 @@ export async function registerUser(formData) {
     );
 
     setTimeout(() => {
-      const loginRoute =
-        (Config && Config.ROUTES && Config.ROUTES.login) || 'index.html';
-      window.location.href = loginRoute;
+      // Use absolute path to root
+      window.location.href = '/';
     }, Config.REDIRECT_DELAY || 3000);
   } catch (error) {
     console.error('Registration error:', error);
@@ -104,9 +103,7 @@ export async function loginUser(email, password) {
     showMessage('message', 'Login successful! Redirecting...', false);
 
     setTimeout(() => {
-      // ✅ Chat page lives at /html/chat.html
-      const chatRoute =
-        (Config && Config.ROUTES && Config.ROUTES.chat) || 'html/chat.html';
+      // Use absolute path to chat
       window.location.replace('/html/chat.html');
     }, Config.REDIRECT_DELAY || 2000);
   } catch (error) {
