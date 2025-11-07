@@ -4,8 +4,13 @@ import { loginUser } from './auth.js';
 import { showMessage, waitForFirebase } from './utils.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('login-form').addEventListener('submit', handleLogin);
-  checkAuthState();
+  const form = document.getElementById('login-form');
+  if (form) {
+    form.addEventListener('submit', handleLogin);
+  }
+
+  // ⛔ Temporarily disabled to avoid redirect loops
+  // checkAuthState();
 });
 
 async function handleLogin(e) {
