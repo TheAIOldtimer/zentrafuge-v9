@@ -35,41 +35,74 @@ async function initializeChat() {
 }
 
 async function checkAuthentication() {
-    try {
-        await waitForFirebase();
-        
-        // Use a Promise to wait for initial auth state
-        const user = await new Promise((resolve) => {
-            const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
-                unsubscribe(); // Stop listening after first check
-                resolve(user);
-            });
-        });
-        
-        if (!user) {
-            console.log('❌ No authenticated user, redirecting to login');
-            window.location.href = '../index.html';
-            return;
-        }
-        
-        // Check if user has completed onboarding
-        const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
-        
-        if (!userDoc.exists || !userDoc.data().onboarding_complete) {
-            console.log('⚠️ User not onboarded, redirecting...');
-            window.location.href = '../onboarding.html';
-            return;
-        }
-        
-        // User is authenticated and onboarded
-        currentUser = user;
-        document.getElementById('user-name').textContent = user.displayName || user.email;
-        
-        console.log('✅ Chat ready for user:', {
-            email: user.email,
-            verified: user.emailVerified,
-            name: user.displayName
-        });
+  try {
+    await waitForFirebase();
+
+    // Wait once for initial auth state
+    const user = await new Promise((resolve) => {
+      const unsubscribe = firebase.auth().onAuthStateChanged((u) => {
+        unsubscribe();
+        resolve(u);
+      });
+    });
+
+    if (!user) {
+      console.log('❌ No authenticated user, redirecting to login');
+      // If your login page is root /index.html, this is correct from /html/chat.html:
+      window.location.href = '../index.html';
+      return;
+    }
+
+    const userDoc = await firebase
+      .firestore()
+      .collection('users')
+      .doc(user.uid)
+      .get();
+
+    if (!userDoc.exists || !userDoc.data().onboarding_complete) {
+      console.log('⚠️ User not onboarded, redirecting to onboarding...');
+      // chat.html and onboarding.html live together under /html/
+      window.location.href = 'onboarding.html';
+      return;
+    }
+
+    // ✅ Authenticated and onboarded
+    currentUser = user;
+
+    const nameEl = document.getElementById('user-name');
+    if (nameEl) {
+      nameEl.textContent = user.displayName || user.email || 'You';
+    }
+
+    console.log('✅ Chat ready for user:', {
+      email: user.email,
+      verified: user.emailVerified,
+      name: user.displayName,
+    });
+
+    showWelcomeMessage();
+
+  } catch (error) {
+    console.error('❌ Authentication check failed:', error);
+
+    // 🔴 IMPORTANT: do NOT redirect back to index here — that feeds the loop.
+    const messages = document.getElementById('chat-messages');
+    if (messages) {
+      const div = document.createElement('div');
+      div.className = 'message assistant';
+      div.innerHTML = `
+        <div class="message-content">
+          I'm having trouble confirming your login right now.
+          Please go back to the main page and sign in again.
+        </div>
+      `;
+      messages.appendChild(div);
+    }
+
+    // Disable input so the user doesn't type into a broken session
+    setInputState(false);
+  }
+}
         
         // NOW show welcome message after everything is ready
         showWelcomeMessage();
