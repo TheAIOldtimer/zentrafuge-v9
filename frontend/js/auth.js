@@ -53,6 +53,9 @@ export async function registerUser(formData) {
       );
     }
 
+    // ✅ Sign out so they have to verify first
+    await firebase.auth().signOut();
+
     // ✅ Notify user and redirect to login
     showMessage(
       'message',
@@ -87,16 +90,44 @@ export async function loginUser(email, password) {
       .auth()
       .signInWithEmailAndPassword(email, password);
 
-    const user = userCredential.user;
+    let user = userCredential.user;
+
+    // ✅ Reload user to get fresh email verification status
+    await user.reload();
+    user = firebase.auth().currentUser;
 
     // ✅ Enforce email verification before proceeding
     if (!user.emailVerified) {
       await firebase.auth().signOut();
       showMessage(
         'message',
-        'Please verify your email before logging in.',
+        'Please verify your email before logging in. Check your inbox (and spam folder).',
         true
       );
+      
+      // Offer to resend verification email
+      const messageDiv = document.getElementById('message');
+      if (messageDiv) {
+        const resendLink = document.createElement('a');
+        resendLink.href = '#';
+        resendLink.textContent = 'Resend verification email';
+        resendLink.style.cssText = 'display: block; margin-top: 0.5rem; color: #3b82f6; text-decoration: underline;';
+        resendLink.onclick = async (e) => {
+          e.preventDefault();
+          try {
+            // Sign in again to send email
+            const tempUser = await firebase.auth().signInWithEmailAndPassword(email, password);
+            await tempUser.user.sendEmailVerification();
+            await firebase.auth().signOut();
+            showMessage('message', 'Verification email sent! Please check your inbox.', false);
+          } catch (err) {
+            console.error('Resend error:', err);
+            showMessage('message', 'Could not resend email. Please try again later.', true);
+          }
+        };
+        messageDiv.appendChild(resendLink);
+      }
+      
       return;
     }
 
