@@ -1,8 +1,11 @@
 [build]
+  # Publish the frontend directory
   publish = "frontend"
+  
+  # No build command needed for static site
+  command = ""
 
 [[redirects]]
-  from = "/html/*"
-  to = "/html/:splat"
+  from = "/*"
+  to = "/index.html"
   status = 200
-  force = true
