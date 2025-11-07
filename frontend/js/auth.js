@@ -14,57 +14,40 @@ import { createUserProfile } from './api.js';
 /**
  * Registers a new user with Firebase and your backend
  */
-export async function registerUser(formData) {
+export async function loginUser(email, password) {
   try {
     showLoading('loading', true);
     showMessage('message', '');
 
-    // Wait until Firebase SDK has loaded
     await waitForFirebase();
 
-    // ✅ Create user in Firebase Auth
     const userCredential = await firebase
       .auth()
-      .createUserWithEmailAndPassword(formData.email, formData.password);
+      .signInWithEmailAndPassword(email, password);
 
     const user = userCredential.user;
 
-    // ✅ Send email verification
-    await user.sendEmailVerification();
-
-    // ✅ Update Firebase user profile with display name
-    await user.updateProfile({ displayName: formData.name });
-
-    // ✅ Create profile in your backend Firestore via API
-    const token = await user.getIdToken();
-    try {
-      await createUserProfile(token, {
-        name: formData.name,
-        email: formData.email,
-        is_veteran: formData.isVeteran,
-        marketing_opt_in: false
-      });
-    } catch (apiError) {
-      console.warn('⚠️ Backend profile creation failed:', apiError);
+    // ✅ Enforce email verification before proceeding
+    if (!user.emailVerified) {
+      await firebase.auth().signOut();
       showMessage(
         'message',
-        'Account created, but we had trouble saving your profile. Please contact support if needed.',
+        'Please verify your email before logging in.',
         true
       );
+      return;
     }
 
-    // ✅ Notify user and redirect to login
-    showMessage(
-      'message',
-      'Account created! Please check your email and verify before logging in.',
-      false
-    );
+    showMessage('message', 'Login successful! Redirecting...', false);
 
     setTimeout(() => {
-      window.location.href = Config?.ROUTES?.login || 'index.html';
-    }, Config.REDIRECT_DELAY || 3000);
+      // ✅ Chat page lives at /html/chat.html
+      const chatRoute =
+        (Config && Config.ROUTES && Config.ROUTES.chat) || 'html/chat.html';
+      window.location.href = chatRoute;
+    }, Config.REDIRECT_DELAY || 2000);
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Login error:', error);
     showMessage('message', getFirebaseErrorMessage(error), true);
   } finally {
     showLoading('loading', false);
