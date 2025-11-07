@@ -48,11 +48,12 @@ async function checkAuthentication() {
 
     if (!user) {
       console.log('❌ No authenticated user, redirecting to login');
-      // If your login page is root /index.html, this is correct from /html/chat.html:
+      // Login page is root /index.html, so from /html/chat.html this is correct:
       window.location.href = '../index.html';
       return;
     }
 
+    // Check if user has completed onboarding
     const userDoc = await firebase
       .firestore()
       .collection('users')
@@ -66,7 +67,7 @@ async function checkAuthentication() {
       return;
     }
 
-    // ✅ Authenticated and onboarded
+    // ✅ User is authenticated and onboarded
     currentUser = user;
 
     const nameEl = document.getElementById('user-name');
@@ -80,12 +81,13 @@ async function checkAuthentication() {
       name: user.displayName,
     });
 
+    // NOW show welcome message after everything is ready
     showWelcomeMessage();
 
   } catch (error) {
     console.error('❌ Authentication check failed:', error);
 
-    // 🔴 IMPORTANT: do NOT redirect back to index here — that feeds the loop.
+    // 🔴 Do NOT bounce back to index here – that feeds the loop.
     const messages = document.getElementById('chat-messages');
     if (messages) {
       const div = document.createElement('div');
@@ -99,20 +101,10 @@ async function checkAuthentication() {
       messages.appendChild(div);
     }
 
-    // Disable input so the user doesn't type into a broken session
+    // Disable input so the user isn't typing into a broken session
     setInputState(false);
   }
 }
-        
-        // NOW show welcome message after everything is ready
-        showWelcomeMessage();
-        
-    } catch (error) {
-        console.error('❌ Authentication check failed:', error);
-        window.location.href = '../index.html';
-    }
-}
-
 async function handleSendMessage(e) {
     e.preventDefault();
     
