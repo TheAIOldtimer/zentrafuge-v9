@@ -25,7 +25,7 @@
                 <h1>Welcome to Zentrafuge</h1>
                 <p class="subtitle">Let's set up your AI companion</p>
                 <div class="progress-bar">
-                    <div class="progress-fill" style="width: 16.67%;"></div>
+                    <div class="progress-fill" id="progress-fill" style="width: 16.67%;"></div>
                 </div>
             </div>
 
@@ -78,7 +78,7 @@
             </div>
 
             <!-- Step 2: Veteran Status -->
-            <div id="onboarding-step-veteran" class="onboarding-step" style="display: none;">
+            <div id="onboarding-step-2" class="onboarding-step" style="display: none;">
                 <h2>🎖️ Military Service</h2>
                 <p>Thank you for your service. We're honored to support veterans with specialized understanding of military culture and experience.</p>
                 
@@ -148,7 +148,7 @@
             </div>
 
             <!-- Step 3: Communication Style -->
-            <div id="onboarding-step-2" class="onboarding-step" style="display: none;">
+            <div id="onboarding-step-3" class="onboarding-step" style="display: none;">
                 <h2>💬 Communication Preferences</h2>
                 <p>How do you prefer to communicate? This helps your companion match your style.</p>
                 
@@ -193,7 +193,7 @@
             </div>
 
             <!-- Step 4: Emotional Support Preferences -->
-            <div id="onboarding-step-3" class="onboarding-step" style="display: none;">
+            <div id="onboarding-step-4" class="onboarding-step" style="display: none;">
                 <h2>🌱 Emotional Support Style</h2>
                 <p>How do you process emotions and receive support?</p>
                 
@@ -238,7 +238,7 @@
             </div>
 
             <!-- Step 5: Life Context -->
-            <div id="onboarding-step-4" class="onboarding-step" style="display: none;">
+            <div id="onboarding-step-5" class="onboarding-step" style="display: none;">
                 <h2>🎯 Tell Us About Your Journey</h2>
                 <p>Share what's meaningful to you right now. This helps your companion understand your context.</p>
                 
@@ -281,39 +281,39 @@
             </div>
 
             <!-- Step 6: Completion -->
-            <div id="onboarding-step-5" class="onboarding-step" style="display: none;">
+            <div id="onboarding-step-6" class="onboarding-step" style="display: none;">
                 <div class="completion-animation">
                     <div class="checkmark">✓</div>
                     <h2>🎉 Welcome to Zentrafuge!</h2>
                     <p>Your AI companion is ready to meet you. This is the beginning of a unique relationship built on trust, growth, and data sovereignty.</p>
                 </div>
                 
-                <div class="feature-list">
+                <ul class="feature-list">
                     <li>🔐 Your data is encrypted and belongs to you</li>
                     <li>🧠 Your companion will learn and grow with you</li>
                     <li>💡 You'll participate in any AI economic value created</li>
                     <li>🌱 This relationship can evolve as you do</li>
-                </div>
+                </ul>
                 
                 <button type="button" class="btn btn-primary" id="enter-chat">Start Chatting</button>
             </div>
         </div>
     </div>
 
-    <!-- Modular JavaScript -->
-    <script src="../js/firebase.js"></script>
+    <!-- Firebase Init -->
+    <script src="../js/firebase-init.js"></script>
+    
     <script type="module" src="../js/onboarding.js"></script>
+    
     <script type="module">
-        import { initializeOnboarding } from '../js/onboarding.js';
+        import Config from '../js/config.js';
         
         document.addEventListener('DOMContentLoaded', function() {
             // Check if user is authenticated
             firebase.auth().onAuthStateChanged((user) => {
-                if (user) {
-                    initializeOnboarding();
-                } else {
+                if (!user) {
                     // Redirect to login if not authenticated
-                    window.location.href = '../index.html';
+                    window.location.replace('/');
                 }
             });
 
@@ -325,65 +325,15 @@
                     veteranDetails.style.display = veteranCheckbox.checked ? 'block' : 'none';
                 });
             }
-        });
-
-        // Enhanced onboarding completion function
-        async function completeVeteranOnboarding() {
-            const onboardingData = {
-                ai_name: document.getElementById('ai_name')?.value || 'Cael',
-                communication_style: document.querySelector('input[name="communication_style"]:checked')?.value || 'balanced',
-                emotional_pacing: document.querySelector('input[name="emotional_pacing"]:checked')?.value || 'varies_situation',
-                life_chapter: document.getElementById('life_chapter')?.value || '',
-                sources_of_meaning: Array.from(document.querySelectorAll('input[name="sources_of_meaning"]:checked')).map(input => input.value),
-                effective_support: Array.from(document.querySelectorAll('input[name="effective_support"]:checked')).map(input => input.value),
-                veteran_profile: {
-                    is_veteran: document.getElementById('veteran')?.checked || false,
-                    service_branch: document.getElementById('service_branch')?.value || null,
-                    service_country: document.getElementById('service_country')?.value || 'US',
-                    service_years: document.getElementById('service_years')?.value || null,
-                    unit_served: document.getElementById('unit_served')?.value || null,
-                    deployments: document.getElementById('deployments')?.value || null,
-                    verification_status: 'pending' // Will be verified by backend
-                }
-            };
             
-            // Show loading state
-            document.getElementById('onboarding-loading').classList.remove('hidden');
-            document.getElementById('onboarding-step-4').style.display = 'none';
-            
-            try {
-                // Send to backend for processing and verification
-                const token = await firebase.auth().currentUser.getIdToken();
-                const response = await fetch(`${Config.API_BASE}/user/onboarding`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(onboardingData)
+            // Enter chat button
+            const enterChatBtn = document.getElementById('enter-chat');
+            if (enterChatBtn) {
+                enterChatBtn.addEventListener('click', () => {
+                    window.location.href = '/html/chat.html';
                 });
-                
-                if (response.ok) {
-                    const responseData = await response.json();
-                    
-                    // If veteran verification is approved, initialize veteran system
-                    if (responseData.veteran_verified) {
-                        const veteranSystem = await initializeVeteranSystem();
-                        await veteranSystem.verifyVeteranStatus(firebase.auth().currentUser.uid, token);
-                    }
-                    
-                    // Continue to completion step
-                    showOnboardingStep(5);
-                } else {
-                    throw new Error('Failed to complete onboarding');
-                }
-            } catch (error) {
-                console.error('Onboarding error:', error);
-                document.getElementById('onboarding-message').innerHTML = `<p class="error">Error: ${error.message}</p>`;
-                document.getElementById('onboarding-loading').classList.add('hidden');
-                document.getElementById('onboarding-step-4').style.display = 'block';
             }
-        }
+        });
     </script>
 </body>
 </html>
