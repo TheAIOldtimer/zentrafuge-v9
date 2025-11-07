@@ -238,7 +238,7 @@ async function handleLogout() {
   try {
     await firebase.auth().signOut();
     // Login page is /index.html at root
-    window.location.href = '../index.html';
+    window.location.replace('/');
   } catch (error) {
     console.error('Logout error:', error);
   }
