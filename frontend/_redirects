@@ -1,8 +1,8 @@
-# Serve index.html for root
+# Serve index.html at root (login page)
 /    /index.html    200
 
-# Allow clean URLs for html folder
+# Allow clean URLs for html folder pages
 /html/*  /html/:splat  200
 
-# Fallback for any other routes (SPA-style)
+# Catch-all: redirect everything else to index.html (for client-side routing)
 /*    /index.html   200
