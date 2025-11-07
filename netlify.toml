@@ -1,7 +1,13 @@
 [build]
-base = "frontend"
-publish = "frontend"
-command = "echo 'No build needed for static frontend.'"
+  base = "frontend"
+  publish = "frontend"
+  command = ""  # no build step, just static files
 
 [functions]
-directory = "netlify/functions"
+  directory = "netlify/functions"
+
+# Optional: send "/" to the login page. Do NOT use a catch-all "/*" here.
+[[redirects]]
+  from = "/"
+  to = "/index.html"
+  status = 200
