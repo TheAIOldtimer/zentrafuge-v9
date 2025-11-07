@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - Zentrafuge v9</title>
+    
+    <link rel="icon" type="image/png" href="assets/Zentrafuge-WIDE-Logo-Transparent.png">
+    
+    <!-- Firebase SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="card">
+            <img src="assets/Zentrafuge-WIDE-Logo-Transparent.png" alt="Zentrafuge" class="logo">
+            <h1 id="status-title">Processing...</h1>
+            
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Verifying your email...</p>
+            </div>
+            
+            <div id="message"></div>
+            
+            <div id="action-buttons" style="display: none; margin-top: 2rem;">
+                <button id="continue-btn" class="btn">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/firebase-init.js"></script>
+    
+    <script>
+        console.log('🔍 Action handler page loaded');
+        
+        // Wait for Firebase to initialize
+        window.addEventListener('firebaseReady', () => {
+            handleFirebaseAction();
+        });
+        
+        // Also try immediately if Firebase is already ready
+        if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+            handleFirebaseAction();
+        }
+        
+        async function handleFirebaseAction() {
+            const loading = document.getElementById('loading');
+            const messageDiv = document.getElementById('message');
+            const statusTitle = document.getElementById('status-title');
+            const actionButtons = document.getElementById('action-buttons');
+            const continueBtn = document.getElementById('continue-btn');
+            
+            try {
+                // Get the action code from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const mode = urlParams.get('mode');
+                const actionCode = urlParams.get('oobCode');
+                
+                console.log('📋 Action mode:', mode);
+                console.log('🔑 Action code:', actionCode ? 'Present' : 'Missing');
+                
+                if (!actionCode) {
+                    throw new Error('Invalid verification link. Please request a new one.');
+                }
+                
+                // Handle different action modes
+                switch (mode) {
+                    case 'verifyEmail':
+                        await handleVerifyEmail(actionCode);
+                        break;
+                    case 'resetPassword':
+                        await handlePasswordReset(actionCode);
+                        break;
+                    default:
+                        throw new Error('Unknown action mode');
+                }
+                
+            } catch (error) {
+                console.error('❌ Action handler error:', error);
+                loading.style.display = 'none';
+                statusTitle.textContent = 'Verification Failed';
+                messageDiv.innerHTML = `
+                    <div class="message-error">
+                        <strong>Error:</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+                actionButtons.style.display = 'block';
+                continueBtn.textContent = 'Back to Login';
+                continueBtn.onclick = () => {
+                    window.location.href = '/';
+                };
+            }
+        }
+        
+        async function handleVerifyEmail(actionCode) {
+            const loading = document.getElementById('loading');
+            const messageDiv = document.getElementById('message');
+            const statusTitle = document.getElementById('status-title');
+            const actionButtons = document.getElementById('action-buttons');
+            const continueBtn = document.getElementById('continue-btn');
+            
+            try {
+                console.log('📧 Verifying email...');
+                
+                // Apply the action code (verifies the email)
+                await firebase.auth().applyActionCode(actionCode);
+                
+                console.log('✅ Email verified successfully!');
+                
+                // Get current user
+                const user = firebase.auth().currentUser;
+                
+                if (user) {
+                    // User is logged in, reload to get verified status
+                    await user.reload();
+                    console.log('👤 User reloaded, verified:', user.emailVerified);
+                }
+                
+                // Success!
+                loading.style.display = 'none';
+                statusTitle.textContent = 'Email Verified! ✅';
+                messageDiv.innerHTML = `
+                    <div class="message-success">
+                        <strong>Success!</strong><br>
+                        Your email has been verified successfully.
+                    </div>
+                `;
+                
+                // Check onboarding status
+                if (user) {
+                    const userDoc = await firebase
+                        .firestore()
+                        .collection('users')
+                        .doc(user.uid)
+                        .get();
+                    
+                    if (userDoc.exists && userDoc.data().onboarding_complete) {
+                        // Already completed onboarding
+                        continueBtn.textContent = 'Continue to Chat';
+                        continueBtn.onclick = () => {
+                            window.location.href = '/html/chat.html';
+                        };
+                    } else {
+                        // Need to complete onboarding
+                        continueBtn.textContent = 'Complete Setup';
+                        continueBtn.onclick = () => {
+                            window.location.href = '/html/onboarding.html';
+                        };
+                    }
+                } else {
+                    // Not logged in, go to login
+                    continueBtn.textContent = 'Sign In';
+                    continueBtn.onclick = () => {
+                        window.location.href = '/';
+                    };
+                }
+                
+                actionButtons.style.display = 'block';
+                
+            } catch (error) {
+                console.error('❌ Email verification failed:', error);
+                throw error;
+            }
+        }
+        
+        async function handlePasswordReset(actionCode) {
+            // Future: Handle password reset
+            console.log('🔐 Password reset handler - to be implemented');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>
