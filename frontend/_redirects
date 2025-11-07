@@ -1,4 +1,8 @@
-# Allow clean URLs for html folder (Status 200 = History mode for "SPA-like" but safe for MPA)
+# Serve index.html for root
+/    /index.html    200
+
+# Allow clean URLs for html folder
 /html/*  /html/:splat  200
 
-# Force trailing slash off or whatever, but main is above
+# Fallback for any other routes (SPA-style)
+/*    /index.html   200
