@@ -40,25 +40,50 @@ async function initializeChat() {
 }
 
 async function checkAuthentication() {
-  try {
-    await waitForFirebase();
+    try {
+        await waitForFirebase();
 
-    console.log('🔍 Checking Firebase auth state…');
+        console.log('🔍 Checking Firebase auth state…');
 
-    // Wait once for initial auth state
-    const user = await new Promise((resolve) => {
-      const unsubscribe = firebase.auth().onAuthStateChanged((u) => {
-        unsubscribe();
-        resolve(u);
-      });
-    });
+        // Wait for auth state with longer timeout
+        const user = await new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 5;
+            
+            const checkAuth = () => {
+                const currentUser = firebase.auth().currentUser;
+                
+                if (currentUser) {
+                    console.log('✅ User found:', currentUser.email);
+                    resolve(currentUser);
+                } else {
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        console.log('❌ No user after', maxAttempts, 'attempts');
+                        resolve(null);
+                    } else {
+                        console.log('⏳ Waiting for auth... attempt', attempts);
+                        setTimeout(checkAuth, 500); // Wait 500ms and try again
+                    }
+                }
+            };
+            
+            checkAuth();
+        });
 
-    if (!user) {
-      console.log('❌ No authenticated user, redirecting to login');
-      // Login page is /index.html at root, chat.html is /html/chat.html
-      window.location.href = '../index.html';
-      return;
-    }
+        if (!user) {
+            console.log('❌ No authenticated user, redirecting to login');
+            window.location.href = '/';
+            return;
+        }
+
+        // Verify email is confirmed
+        if (!user.emailVerified) {
+            console.log('⚠️ Email not verified, redirecting to login');
+            await firebase.auth().signOut();
+            window.location.href = '/';
+            return;
+        }
 
     console.log('👤 Firebase user found:', {
       uid: user.uid,
