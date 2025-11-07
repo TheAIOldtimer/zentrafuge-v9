@@ -1,5 +1,5 @@
 // frontend/js/auth.js — Zentrafuge v9 (UK Veterans Edition)
-// Using Firebase v8 global SDK
+// Using Firebase compat SDK (global `firebase` object)
 // Handles registration + login via Firebase Auth and your Flask backend
 
 import Config from './config.js';
@@ -7,47 +7,66 @@ import {
   waitForFirebase,
   showMessage,
   showLoading,
-  getFirebaseErrorMessage
+  getFirebaseErrorMessage,
 } from './utils.js';
 import { createUserProfile } from './api.js';
 
 /**
  * Registers a new user with Firebase and your backend
  */
-export async function loginUser(email, password) {
+export async function registerUser(formData) {
   try {
     showLoading('loading', true);
     showMessage('message', '');
 
+    // Wait until Firebase SDK has loaded
     await waitForFirebase();
 
+    // ✅ Create user in Firebase Auth
     const userCredential = await firebase
       .auth()
-      .signInWithEmailAndPassword(email, password);
+      .createUserWithEmailAndPassword(formData.email, formData.password);
 
     const user = userCredential.user;
 
-    // ✅ Enforce email verification before proceeding
-    if (!user.emailVerified) {
-      await firebase.auth().signOut();
+    // ✅ Send email verification
+    await user.sendEmailVerification();
+
+    // ✅ Update Firebase user profile with display name
+    await user.updateProfile({ displayName: formData.name });
+
+    // ✅ Create profile in your backend via API
+    const token = await user.getIdToken();
+    try {
+      await createUserProfile(token, {
+        name: formData.name,
+        email: formData.email,
+        is_veteran: formData.isVeteran,
+        marketing_opt_in: false,
+      });
+    } catch (apiError) {
+      console.warn('⚠️ Backend profile creation failed:', apiError);
       showMessage(
         'message',
-        'Please verify your email before logging in.',
+        'Account created, but we had trouble saving your profile. Please contact support if needed.',
         true
       );
-      return;
     }
 
-    showMessage('message', 'Login successful! Redirecting...', false);
+    // ✅ Notify user and redirect to login
+    showMessage(
+      'message',
+      'Account created! Please check your email and verify before logging in.',
+      false
+    );
 
     setTimeout(() => {
-      // ✅ Chat page lives at /html/chat.html
-      const chatRoute =
-        (Config && Config.ROUTES && Config.ROUTES.chat) || 'html/chat.html';
-      window.location.href = chatRoute;
-    }, Config.REDIRECT_DELAY || 2000);
+      const loginRoute =
+        (Config && Config.ROUTES && Config.ROUTES.login) || 'index.html';
+      window.location.href = loginRoute;
+    }, Config.REDIRECT_DELAY || 3000);
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Registration error:', error);
     showMessage('message', getFirebaseErrorMessage(error), true);
   } finally {
     showLoading('loading', false);
@@ -85,7 +104,10 @@ export async function loginUser(email, password) {
     showMessage('message', 'Login successful! Redirecting...', false);
 
     setTimeout(() => {
-      window.location.href = Config?.ROUTES?.chat || 'chat.html';
+      // ✅ Chat page lives at /html/chat.html
+      const chatRoute =
+        (Config && Config.ROUTES && Config.ROUTES.chat) || 'html/chat.html';
+      window.location.href = chatRoute;
     }, Config.REDIRECT_DELAY || 2000);
   } catch (error) {
     console.error('Login error:', error);
