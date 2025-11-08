@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title data-translate="support_page_title">Support – Zentrafuge</title>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- Correct path (per tree) -->
+  <script src="../firebase-init.js"></script>
+
+  <!-- Page CSS -->
+  <link rel="stylesheet" href="../css/pages/support.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="app-header">
+    <a href="../chat.html" class="brand">
+      <img src="../assets/Zentrafuge-WIDE-Logo-Transparent.png" alt="Zentrafuge" class="logo" />
+    </a>
+    <nav class="right-actions" aria-label="Primary">
+      <a href="faqs.html" class="nav-btn faq-btn">FAQs</a>
+      <a href="../chat.html" class="nav-btn chat-btn">Chat</a>
+      <a href="https://www.paypal.com/paypalme/zentrafuge" target="_blank" rel="noopener" class="donate-btn">Donate</a>
+      <button id="sign-out-btn" class="sign-out-btn" type="button">Sign Out</button>
+    </nav>
+  </header>
+
+  <!-- Language Selector -->
+  <div class="language-selector-container">
+    <select id="language-selector" aria-label="Select Language"></select>
+  </div>
+
+  <div class="container">
+    <h1 data-translate="support_title">You're Not Alone</h1>
+    <p class="intro" data-translate="support_intro">
+      If you're feeling overwhelmed or in distress, please reach out. These resources can offer you support right now:
+    </p>
+
+    <div id="helpline-content"></div>
+
+    <div class="link-container">
+      <a class="return-link" href="../chat.html" data-translate="return_to_cael">Return to Cael</a>
+    </div>
+  </div>
+
+  <!-- Page JS -->
+  <script type="module">
+    // Sign-out wiring (keeps header simple on Support; no name needed)
+    const btn = document.getElementById('sign-out-btn');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        try {
+          firebase.auth().signOut().then(() => {
+            window.location.href = '../login.html';
+          });
+        } catch (_) {
+          window.location.href = '../login.html';
+        }
+      });
+    }
+  </script>
+  <script type="module" src="../js/pages/support.js"></script>
+</body>
+</html>
