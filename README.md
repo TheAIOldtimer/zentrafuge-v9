@@ -97,8 +97,7 @@ Zentrafuge chat is handled via a single POST route:
 ## 👥 Contributors
 
 * 🧠 Ant — founder, product architect
-* 🤖 Cael (default name, can be modified by user) — relational AI companion
-* 🛠 Claude — backend orchestration & prompt logic
+
 
 ---
 
@@ -110,7 +109,3 @@ Every Cael is private, ephemeral, and emotionally grounded.
 
 ---
 
-```
-
-Let me know if you want a separate Dev Quickstart section or if you're ready for GitHub push instructions next.
-```
