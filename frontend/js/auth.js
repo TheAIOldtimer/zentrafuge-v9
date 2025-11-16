@@ -131,12 +131,55 @@ export async function loginUser(email, password) {
       return;
     }
 
-    showMessage('message', 'Login successful! Redirecting...', false);
+    // ✅ FIXED: Check onboarding status BEFORE redirecting
+    console.log('🔍 Checking onboarding status...');
+    
+    try {
+      const userDoc = await firebase
+        .firestore()
+        .collection('users')
+        .doc(user.uid)
+        .get();
 
-    setTimeout(() => {
-      // Use absolute path to chat
-      window.location.replace('/html/chat.html');
-    }, Config.REDIRECT_DELAY || 2000);
+      const userData = userDoc.exists ? userDoc.data() : null;
+      const onboardingComplete = userData?.onboarding_complete || false;
+
+      console.log('📊 User data:', {
+        exists: userDoc.exists,
+        onboarding_complete: onboardingComplete
+      });
+
+      if (!onboardingComplete) {
+        // User needs onboarding
+        console.log('⚠️ Onboarding not complete, redirecting to onboarding...');
+        showMessage('message', 'Please complete your profile setup...', false);
+        
+        setTimeout(() => {
+          window.location.href = '/html/onboarding.html';
+        }, 1000);
+        return;
+      }
+
+      // ✅ User has completed onboarding, go to chat
+      console.log('✅ Onboarding complete, redirecting to chat...');
+      showMessage('message', 'Login successful! Redirecting...', false);
+
+      setTimeout(() => {
+        window.location.replace('/html/chat.html');
+      }, Config.REDIRECT_DELAY || 2000);
+
+    } catch (firestoreError) {
+      console.error('❌ Error checking onboarding status:', firestoreError);
+      
+      // If we can't check Firestore, assume they need onboarding
+      console.log('⚠️ Could not check onboarding status, redirecting to onboarding...');
+      showMessage('message', 'Setting up your profile...', false);
+      
+      setTimeout(() => {
+        window.location.href = '/html/onboarding.html';
+      }, 1000);
+    }
+
   } catch (error) {
     console.error('Login error:', error);
     showMessage('message', getFirebaseErrorMessage(error), true);
