@@ -326,6 +326,10 @@ def user_onboarding():
         "cael_initialized": True,
         "completed_at": datetime.utcnow().isoformat(),
         
+        # Email verification tracking (captured from Firebase token)
+        "email_verified": user_info.get("email_verified", True),
+        "email_verified_at": datetime.utcnow().isoformat(),
+        
         # Companion settings
         "companion_name": data.get("cael_name", "Cael"),
         
