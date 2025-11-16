@@ -4,7 +4,7 @@ import Config from './config.js';
 import { showMessage, showLoading } from './utils.js';
 
 let currentStep = 0;
-const totalSteps = 6;
+const totalSteps = 7;  // FIXED: Steps 0-6 = 7 total steps
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeOnboarding();
@@ -138,11 +138,15 @@ async function completeOnboarding() {
         showLoading('onboarding-loading', true);
         showMessage('onboarding-message', '');
         
+        console.log('🔄 Starting onboarding completion...');
+        
         // Get current user
         const user = firebase.auth().currentUser;
         if (!user) {
             throw new Error('User not authenticated');
         }
+        
+        console.log('👤 User authenticated:', user.uid);
         
         // Collect all onboarding data
         const onboardingData = {
@@ -173,6 +177,7 @@ async function completeOnboarding() {
         
         // Get Firebase token
         const token = await user.getIdToken();
+        console.log('🔑 Got Firebase token');
         
         // Send to backend
         const response = await fetch(`${Config.API_BASE}/user/onboarding`, {
@@ -184,17 +189,20 @@ async function completeOnboarding() {
             body: JSON.stringify(onboardingData)
         });
         
+        console.log('📡 Response status:', response.status);
+        
         if (!response.ok) {
             const errorData = await response.json();
+            console.error('❌ Backend error:', errorData);
             throw new Error(errorData.error || 'Failed to complete onboarding');
         }
         
         const result = await response.json();
-        console.log('✅ Onboarding completed:', result);
+        console.log('✅ Onboarding completed successfully:', result);
         
-        // Show completion step
-        currentStep = 5;
-        showStep(5);
+        // FIXED: Show completion step (step 6, not step 5)
+        currentStep = 6;
+        showStep(6);
         updateProgress();
         
         showMessage('onboarding-message', 'Setup completed successfully!', false);
