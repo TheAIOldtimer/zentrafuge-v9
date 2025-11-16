@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeOnboarding() {
     console.log('🎯 Initializing onboarding...');
     
-    // Check authentication
+    // Check authentication (async - wait for Firebase to be ready)
     checkAuth();
     
     // Setup navigation buttons
@@ -33,11 +33,23 @@ function initializeOnboarding() {
 }
 
 async function checkAuth() {
-    const user = firebase.auth().currentUser;
-    if (!user) {
-        console.log('❌ No user found, redirecting to login');
-        window.location.href = '/';
-    }
+    // FIXED: Wait for Firebase auth state instead of checking currentUser immediately
+    console.log('🔐 Checking authentication...');
+    
+    return new Promise((resolve, reject) => {
+        const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
+            unsubscribe(); // Stop listening after first check
+            
+            if (!user) {
+                console.log('❌ No user found, redirecting to login');
+                window.location.href = '/';
+                reject('No user');
+            } else {
+                console.log('✅ User authenticated:', user.uid);
+                resolve(user);
+            }
+        });
+    });
 }
 
 function setupNavigationButtons() {
