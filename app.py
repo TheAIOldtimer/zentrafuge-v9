@@ -39,7 +39,12 @@ openai_client = None
 
 def init_firebase():
     """
-    Lazily initialize Firebase Admin using FIREBASE_CREDENTIALS_JSON.
+    Lazily initialize Firebase Admin.
+
+    Priority:
+    1. FIREBASE_CREDENTIALS_JSON  -> JSON string of service account
+    2. GOOGLE_APPLICATION_CREDENTIALS -> path to serviceAccountKey.json
+
     Returns a Firestore client or None on failure.
     """
     global db
@@ -47,26 +52,37 @@ def init_firebase():
     if db is not None:
         return db
 
-    firebase_creds = os.getenv("FIREBASE_CREDENTIALS_JSON")
-    if not firebase_creds:
-        logger.error("Missing FIREBASE_CREDENTIALS_JSON environment variable")
-        return None
+    firebase_creds_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    cred = None
 
     try:
-        # Only initialize the app once
+        if firebase_creds_json:
+            logger.info("🔐 Using FIREBASE_CREDENTIALS_JSON for Firebase credentials")
+            cred_dict = json.loads(firebase_creds_json)
+            cred = credentials.Certificate(cred_dict)
+        else:
+            cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+            if not cred_path:
+                logger.error(
+                    "Missing Firebase credentials: "
+                    "set FIREBASE_CREDENTIALS_JSON or GOOGLE_APPLICATION_CREDENTIALS"
+                )
+                return None
+
+            logger.info("🔐 Using GOOGLE_APPLICATION_CREDENTIALS path for Firebase credentials")
+            cred = credentials.Certificate(cred_path)
+
         if not firebase_admin._apps:
-            cred = credentials.Certificate(json.loads(firebase_creds))
             firebase_admin.initialize_app(cred)
-            logger.info("✅ Firebase initialized using FIREBASE_CREDENTIALS_JSON")
+            logger.info("✅ Firebase initialized successfully")
 
         db = firestore.client()
         return db
+
     except Exception as e:
         logger.error(f"❌ Firebase initialization failed: {e}")
         db = None
         return None
-
-
 # -----------------------------------------------------------------------------
 # OpenAI Initialization (SDK v1.3.0)
 # -----------------------------------------------------------------------------
