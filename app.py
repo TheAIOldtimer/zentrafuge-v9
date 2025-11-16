@@ -57,6 +57,7 @@ def init_firebase():
 
     try:
         if firebase_creds_json:
+            # JSON content provided directly via env var
             logger.info("🔐 Using FIREBASE_CREDENTIALS_JSON for Firebase credentials")
             cred_dict = json.loads(firebase_creds_json)
             cred = credentials.Certificate(cred_dict)
@@ -72,17 +73,22 @@ def init_firebase():
             logger.info("🔐 Using GOOGLE_APPLICATION_CREDENTIALS path for Firebase credentials")
             cred = credentials.Certificate(cred_path)
 
+        # Only initialize once
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred)
             logger.info("✅ Firebase initialized successfully")
 
         db = firestore.client()
+        logger.info("✅ Firestore client created successfully")
         return db
 
     except Exception as e:
         logger.error(f"❌ Firebase initialization failed: {e}")
+        logger.error(f"❌ Exception details: {type(e).__name__}: {str(e)}")
         db = None
         return None
+
+
 # -----------------------------------------------------------------------------
 # OpenAI Initialization (SDK v1.3.0)
 # -----------------------------------------------------------------------------
@@ -195,6 +201,7 @@ def root():
             "auth_verify": "/auth/verify",
             "chat_legacy": "/chat/message",
             "user_profile": "/user/profile",
+            "user_onboarding": "/user/onboarding",
         },
     })
 
@@ -244,20 +251,26 @@ def user_profile():
         return jsonify({"error": "Database unavailable"}), 503
 
     if request.method == "GET":
-        doc = db_local.collection("users").document(user_id).get()
-        if doc.exists:
-            return jsonify(doc.to_dict())
+        try:
+            doc = db_local.collection("users").document(user_id).get()
+            if doc.exists:
+                logger.info(f"✅ User profile retrieved for {user_id}")
+                return jsonify(doc.to_dict())
 
-        # Default profile if none exists
-        default_profile = {
-            "user_id": user_id,
-            "email": user_info.get("email"),
-            "created_at": datetime.utcnow().isoformat(),
-            "onboarding_complete": False,
-            "cael_initialized": False,
-        }
-        db_local.collection("users").document(user_id).set(default_profile)
-        return jsonify(default_profile)
+            # Default profile if none exists
+            default_profile = {
+                "user_id": user_id,
+                "email": user_info.get("email"),
+                "created_at": datetime.utcnow().isoformat(),
+                "onboarding_complete": False,
+                "cael_initialized": False,
+            }
+            db_local.collection("users").document(user_id).set(default_profile)
+            logger.info(f"✅ Default profile created for {user_id}")
+            return jsonify(default_profile)
+        except Exception as e:
+            logger.error(f"❌ Error retrieving/creating profile: {e}")
+            return jsonify({"error": "Profile error"}), 500
 
     # POST: create/update profile
     data = request.get_json(silent=True) or {}
@@ -276,8 +289,14 @@ def user_profile():
         "onboarding_complete": data.get("onboarding_complete", False),
         "cael_initialized": data.get("cael_initialized", False),
     }
-    db_local.collection("users").document(user_id).set(profile)
-    return jsonify({"success": True, "profile": profile})
+    
+    try:
+        db_local.collection("users").document(user_id).set(profile)
+        logger.info(f"✅ Profile saved for user {user_id}")
+        return jsonify({"success": True, "profile": profile})
+    except Exception as e:
+        logger.error(f"❌ Failed to save profile: {e}")
+        return jsonify({"error": "Failed to save profile"}), 500
 
 @app.route("/user/onboarding", methods=["POST"])
 def user_onboarding():
@@ -289,11 +308,15 @@ def user_onboarding():
         return error_response
 
     user_id = user_info["uid"]
+    logger.info(f"🔄 Starting onboarding for user {user_id}")
+    
     db_local = init_firebase()
     if not db_local:
+        logger.error("❌ Database unavailable during onboarding")
         return jsonify({"error": "Database unavailable"}), 503
 
     data = request.get_json(silent=True) or {}
+    logger.info(f"📥 Received onboarding data: {json.dumps(data, indent=2)}")
     
     # Build comprehensive onboarding profile
     onboarding_data = {
@@ -333,12 +356,13 @@ def user_onboarding():
     
     try:
         # Save to Firestore
+        logger.info(f"💾 Attempting to save onboarding data to Firestore...")
         db_local.collection("users").document(user_id).set(
             onboarding_data, 
             merge=True  # Merge with existing profile data
         )
         
-        logger.info(f"✅ Onboarding completed for user {user_id}")
+        logger.info(f"✅ Onboarding completed and saved for user {user_id}")
         
         return jsonify({
             "success": True,
@@ -348,8 +372,9 @@ def user_onboarding():
         })
         
     except Exception as e:
-        logger.error(f"❌ Onboarding save failed: {e}")
-        return jsonify({"error": "Failed to save onboarding data"}), 500
+        logger.error(f"❌ Onboarding save failed for user {user_id}: {e}")
+        logger.error(f"❌ Exception details: {type(e).__name__}: {str(e)}")
+        return jsonify({"error": f"Failed to save onboarding data: {str(e)}"}), 500
 
 # -------------------------------------------------------------------------
 # New: /index – main chat endpoint with {message} -> {response} contract
@@ -383,25 +408,36 @@ def index_chat():
         return jsonify({"error": "Message required"}), 400
 
     # Log user message (plaintext for now – encryption comes later)
-    db_local.collection("messages").add({
-        "user_id": user_id,
-        "role": "user",
-        "content": message,
-        "timestamp": datetime.utcnow().isoformat(),
-        "via": "index",
-    })
+    try:
+        logger.info(f"💾 Saving user message to Firestore for user {user_id}")
+        message_ref = db_local.collection("messages").add({
+            "user_id": user_id,
+            "role": "user",
+            "content": message,
+            "timestamp": datetime.utcnow().isoformat(),
+            "via": "index",
+        })
+        logger.info(f"✅ User message saved to Firestore with ID: {message_ref[1].id}")
+    except Exception as e:
+        logger.error(f"❌ Failed to save user message to Firestore: {e}")
+        # Continue anyway - we still want to respond even if logging fails
 
     try:
         reply = run_cael_completion(message)
 
-        db_local.collection("messages").add({
-            "user_id": user_id,
-            "role": "assistant",
-            "content": reply,
-            "timestamp": datetime.utcnow().isoformat(),
-            "model": "gpt-3.5-turbo",
-            "via": "index",
-        })
+        try:
+            logger.info(f"💾 Saving assistant response to Firestore for user {user_id}")
+            assistant_ref = db_local.collection("messages").add({
+                "user_id": user_id,
+                "role": "assistant",
+                "content": reply,
+                "timestamp": datetime.utcnow().isoformat(),
+                "model": "gpt-3.5-turbo",
+                "via": "index",
+            })
+            logger.info(f"✅ Assistant message saved to Firestore with ID: {assistant_ref[1].id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save assistant message to Firestore: {e}")
 
         # IMPORTANT: contract: { "response": "Cael replies..." }
         return jsonify({"response": reply})
@@ -439,25 +475,35 @@ def chat_message():
     if not message:
         return jsonify({"error": "Message required"}), 400
 
-    db_local.collection("messages").add({
-        "user_id": user_id,
-        "role": "user",
-        "content": message,
-        "timestamp": datetime.utcnow().isoformat(),
-        "via": "chat.message",
-    })
+    try:
+        logger.info(f"💾 Saving user message to Firestore (legacy endpoint) for user {user_id}")
+        message_ref = db_local.collection("messages").add({
+            "user_id": user_id,
+            "role": "user",
+            "content": message,
+            "timestamp": datetime.utcnow().isoformat(),
+            "via": "chat.message",
+        })
+        logger.info(f"✅ User message saved with ID: {message_ref[1].id}")
+    except Exception as e:
+        logger.error(f"❌ Failed to save user message: {e}")
 
     try:
         reply = run_cael_completion(message)
 
-        db_local.collection("messages").add({
-            "user_id": user_id,
-            "role": "assistant",
-            "content": reply,
-            "timestamp": datetime.utcnow().isoformat(),
-            "model": "gpt-3.5-turbo",
-            "via": "chat.message",
-        })
+        try:
+            logger.info(f"💾 Saving assistant response (legacy endpoint)")
+            assistant_ref = db_local.collection("messages").add({
+                "user_id": user_id,
+                "role": "assistant",
+                "content": reply,
+                "timestamp": datetime.utcnow().isoformat(),
+                "model": "gpt-3.5-turbo",
+                "via": "chat.message",
+            })
+            logger.info(f"✅ Assistant message saved with ID: {assistant_ref[1].id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save assistant message: {e}")
 
         return jsonify({"success": True, "response": reply})
 
