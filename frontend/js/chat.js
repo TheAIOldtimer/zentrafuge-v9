@@ -40,50 +40,50 @@ async function initializeChat() {
 }
 
 async function checkAuthentication() {
-    try {
-        await waitForFirebase();
+  try {
+    await waitForFirebase();
 
-        console.log('🔍 Checking Firebase auth state…');
+    console.log('🔍 Checking Firebase auth state…');
 
-        // Wait for auth state with longer timeout
-        const user = await new Promise((resolve, reject) => {
-            let attempts = 0;
-            const maxAttempts = 5;
-            
-            const checkAuth = () => {
-                const currentUser = firebase.auth().currentUser;
-                
-                if (currentUser) {
-                    console.log('✅ User found:', currentUser.email);
-                    resolve(currentUser);
-                } else {
-                    attempts++;
-                    if (attempts >= maxAttempts) {
-                        console.log('❌ No user after', maxAttempts, 'attempts');
-                        resolve(null);
-                    } else {
-                        console.log('⏳ Waiting for auth... attempt', attempts);
-                        setTimeout(checkAuth, 500); // Wait 500ms and try again
-                    }
-                }
-            };
-            
-            checkAuth();
-        });
+    // Wait for auth state with longer timeout
+    const user = await new Promise((resolve, reject) => {
+      let attempts = 0;
+      const maxAttempts = 5;
 
-        if (!user) {
-            console.log('❌ No authenticated user, redirecting to login');
-            window.location.href = '/';
-            return;
+      const checkAuth = () => {
+        const currentUser = firebase.auth().currentUser;
+
+        if (currentUser) {
+          console.log('✅ User found:', currentUser.email);
+          resolve(currentUser);
+        } else {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            console.log('❌ No user after', maxAttempts, 'attempts');
+            resolve(null);
+          } else {
+            console.log('⏳ Waiting for auth... attempt', attempts);
+            setTimeout(checkAuth, 500); // Wait 500ms and try again
+          }
         }
+      };
 
-        // Verify email is confirmed
-        if (!user.emailVerified) {
-            console.log('⚠️ Email not verified, redirecting to login');
-            await firebase.auth().signOut();
-            window.location.href = '/';
-            return;
-        }
+      checkAuth();
+    });
+
+    if (!user) {
+      console.log('❌ No authenticated user, redirecting to login');
+      window.location.href = '/';
+      return;
+    }
+
+    // Verify email is confirmed
+    if (!user.emailVerified) {
+      console.log('⚠️ Email not verified, redirecting to login');
+      await firebase.auth().signOut();
+      window.location.href = '/';
+      return;
+    }
 
     console.log('👤 Firebase user found:', {
       uid: user.uid,
@@ -144,8 +144,10 @@ async function checkAuthentication() {
 async function handleSendMessage(e) {
   e.preventDefault();
 
+  if (!messageInput || !currentUser) return;
+
   const message = messageInput.value.trim();
-  if (!message || !currentUser) return;
+  if (!message) return;
 
   setInputState(false);
 
@@ -271,11 +273,15 @@ async function handleLogout() {
 
 // Handle Enter key in textarea (send on Enter, new line on Shift+Enter)
 document.addEventListener('keydown', function (e) {
+  // messageInput may not be set yet during very early events
+  if (!messageInput) return;
+
   if (e.target === messageInput && e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     const form = document.getElementById('chat-form');
     if (form) {
-      form.dispatchEvent(new Event('submit'));
+      // Use requestSubmit so we get a real, cancelable submit event
+      form.requestSubmit();
     }
   }
 });
