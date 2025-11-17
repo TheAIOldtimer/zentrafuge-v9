@@ -521,9 +521,43 @@ def chat_message():
 
 
 # -----------------------------------------------------------------------------
+# Startup Initialization
+# -----------------------------------------------------------------------------
+
+def initialize_services():
+    """Initialize Firebase and OpenAI on startup"""
+    logger.info("=" * 60)
+    logger.info("🚀 Starting Zentrafuge v9 Backend")
+    logger.info("=" * 60)
+    logger.info("🔄 Initializing services on startup...")
+    
+    # Initialize Firebase
+    firebase_db = init_firebase()
+    if firebase_db:
+        logger.info("✅ Firebase ready for requests")
+    else:
+        logger.error("❌ Firebase initialization failed")
+        logger.error("   Check FIREBASE_CREDENTIALS_JSON environment variable")
+    
+    # Initialize OpenAI
+    openai_client_instance = init_openai()
+    if openai_client_instance:
+        logger.info("✅ OpenAI ready for requests")
+    else:
+        logger.error("❌ OpenAI initialization failed")
+        logger.error("   Check OPENAI_API_KEY environment variable")
+    
+    logger.info("=" * 60)
+    return firebase_db is not None and openai_client_instance is not None
+
+# Initialize services when module loads (not just in __main__)
+initialize_services()
+
+# -----------------------------------------------------------------------------
 # Entry point
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
+    logger.info(f"🌐 Starting Flask development server on port {port}")
     app.run(host="0.0.0.0", port=port, debug=False)
