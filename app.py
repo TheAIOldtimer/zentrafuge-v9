@@ -132,13 +132,20 @@ def init_openai():
 def verify_firebase_token(token: str):
     """
     Verify a Firebase ID token and return the decoded payload, or None.
+    Ensures Firebase Admin is initialized before verification.
     """
+    # Make sure Firebase is initialized
+    db_local = init_firebase()
+    if not db_local:
+        logger.error("Token verification failed: Firebase not initialized")
+        return None
+
     try:
-        return auth.verify_id_token(token)
+        decoded = auth.verify_id_token(token)
+        return decoded
     except Exception as e:
         logger.error(f"Token verification failed: {e}")
         return None
-
 
 def get_authorized_user():
     """
