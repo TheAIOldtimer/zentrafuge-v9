@@ -1,7 +1,7 @@
 // frontend/js/config.js
 
 const Config = {
-  API_BASE: 'https://zentrafuge-v9.onrender.com',
+  API_BASE: 'https://zentrafuge-test-area.onrender.com',
   ROUTES: {
     login: '/',                    // Use absolute path
     register: '/html/register.html',
