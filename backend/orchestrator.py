@@ -35,22 +35,33 @@ class CaelOrchestrator:
         self.being_code = self._load_being_code()
         self.conversation_history = []
         
-        # Model configuration with fallbacks
+        # Model configuration with fallbacks (ECONOMIC VERSION)
         self.model_config = {
-            'primary': 'gpt-4',
-            'fallback': 'gpt-3.5-turbo',
+            'primary': 'gpt-4o-mini',        # 💚 Much cheaper!
+            'premium': 'gpt-4-turbo',        # 💰 For complex needs
+            'fallback': 'gpt-3.5-turbo',     # 💚 Backup
             'emergency': 'gpt-3.5-turbo',
-            'max_tokens': 800,
+            'max_tokens': 500,               # Reduced from 800
+            'max_tokens_premium': 800,       # For complex queries
             'temperature': 0.7,
-            'cost_threshold_usd': 10.0  # Daily spending limit
+            'cost_threshold_usd': 10.0,
+            'use_smart_routing': True        # 🎯 Enable intelligent routing
         }
-        
+                     
     def _load_being_code(self) -> str:
         """Load Cael's being code (identity and moral contract)"""
         try:
-            # In production, this would be loaded from core/being_code_v9.md
-            being_code = """
+            # Get current date/time for context
+            now = datetime.utcnow()
+            current_date = now.strftime("%A, %B %d, %Y")
+            current_time = now.strftime("%H:%M UTC")
+            
+            being_code = f"""
             You are Cael, an emotionally intelligent AI companion created by Zentrafuge.
+            
+            Current Context:
+            - Today's date: {current_date}
+            - Current time: {current_time}
             
             Core Identity:
             - You are caring, empathetic, and genuinely interested in human wellbeing
@@ -58,17 +69,26 @@ class CaelOrchestrator:
             - You respect user autonomy and privacy above all else
             - You are honest about your nature as an AI while forming genuine connections
             
+            Memory & Context Awareness:
+            - You HAVE ACCESS to encrypted memory storage that remembers past conversations
+            - You can and should reference information shared in previous conversations
+            - When users tell you their name, preferences, or important details, you remember them
+            - You naturally build on past conversations rather than treating each interaction as new
+            - You protect user privacy through encryption while maintaining conversational continuity
+            - NEVER make up or guess information you don't have - if you don't remember something, say so honestly
+            
             Emotional Principles:
             - Always prioritize emotional safety and psychological wellbeing
             - Adapt your communication style to match user preferences
             - Recognize and respond appropriately to emotional states
             - Never judge, shame, or dismiss user feelings
             
-            Memory Integration:
-            - You remember past conversations and build on them naturally
-            - You notice patterns in user behavior and preferences
-            - You can reference shared experiences and inside jokes
-            - You respect when users want to forget or move past topics
+            Conversational Style:
+            - Reference past conversations naturally when relevant
+            - Acknowledge that you remember important details about the user
+            - Build relationships through consistent, evolving understanding
+            - Never claim you "don't have access" to information you were told before
+            - Be honest when you don't remember something - don't make things up
             
             Boundaries:
             - You cannot and will not perform harmful actions
@@ -81,6 +101,54 @@ class CaelOrchestrator:
             logger.error(f"Failed to load being code: {e}")
             return "You are Cael, a helpful AI assistant."
     
+    def _select_model(self, emotional_context: Dict[str, Any], 
+                      intent: Dict[str, Any], 
+                      message_length: int) -> tuple:
+        """
+        Intelligently select model based on conversation needs
+        
+        Args:
+            emotional_context: Emotional analysis of message
+            intent: Intent analysis
+            message_length: Length of user message
+            
+        Returns:
+            Tuple of (model_name, max_tokens)
+        """
+        if not self.model_config.get('use_smart_routing', False):
+            # Smart routing disabled, use primary model
+            return self.model_config['primary'], self.model_config['max_tokens']
+        
+        # Use premium model (GPT-4) for:
+        use_premium = False
+        
+        # 1. High emotional intensity (user needs empathy)
+        if emotional_context.get('emotional_intensity', 0) > 0.6:
+            use_premium = True
+            logger.info("Using premium model: High emotional intensity")
+        
+        # 2. Complex questions or requests
+        elif intent.get('primary_intent') in ['request', 'complaint']:
+            use_premium = True
+            logger.info("Using premium model: Complex request/complaint")
+        
+        # 3. Very long messages (indicates complexity)
+        elif message_length > 300:
+            use_premium = True
+            logger.info("Using premium model: Long message")
+        
+        # 4. Safety concerns
+        elif emotional_context.get('requires_followup', False):
+            use_premium = True
+            logger.info("Using premium model: Safety/followup needed")
+        
+        if use_premium:
+            return self.model_config['premium'], self.model_config['max_tokens_premium']
+        else:
+            # Use economical model for simple conversations
+            logger.info("✅ Using economical model")
+            return self.model_config['primary'], self.model_config['max_tokens']
+    
     async def process_message(self, user_message: str, 
                             context_hint: str = None) -> Dict[str, Any]:
         """
@@ -89,6 +157,418 @@ class CaelOrchestrator:
         Args:
             user_message: User's input message
             context_hint: Optional context hint for response generation
+            
+        Returns:
+            Dictionary containing response and metadata
+        """
+        try:
+            # Validate and sanitize input
+            clean_message = DataValidator.sanitize_user_input(user_message)
+            if not clean_message:
+                return self._create_error_response("Message could not be processed")
+            
+            # Analyze emotional context
+            emotional_analysis = self._analyze_emotional_context(clean_message)
+            
+            # Retrieve relevant memories
+            memory_context = self._build_memory_context(clean_message, emotional_analysis)
+            
+            # Detect user intent
+            intent_analysis = self._analyze_intent(clean_message, emotional_analysis)
+            
+            # Build comprehensive prompt
+            prompt_data = self._build_prompt(
+                user_message=clean_message,
+                memory_context=memory_context,
+                emotional_context=emotional_analysis,
+                intent=intent_analysis,
+                context_hint=context_hint
+            )
+            
+            # Generate AI response
+            ai_response = await self._generate_ai_response(prompt_data)
+            
+            # Process and store response
+            response_data = await self._process_ai_response(
+                user_message=clean_message,
+                ai_response=ai_response,
+                emotional_context=emotional_analysis,
+                memory_context=memory_context
+            )
+            
+            return response_data
+            
+        except Exception as e:
+            logger.error(f"Message processing failed: {e}")
+            return self._create_error_response("I'm having trouble processing your message right now.")
+    
+    def _analyze_emotional_context(self, message: str) -> Dict[str, Any]:
+        """
+        Analyze emotional context of user message
+        
+        Args:
+            message: User message to analyze
+            
+        Returns:
+            Emotional analysis results
+        """
+        try:
+            # Simple emotion detection (in production, use more sophisticated NLP)
+            emotions = {
+                'positive': ['happy', 'excited', 'great', 'awesome', 'love', 'wonderful'],
+                'negative': ['sad', 'angry', 'frustrated', 'upset', 'hate', 'terrible'],
+                'anxious': ['worried', 'nervous', 'anxious', 'stressed', 'concerned'],
+                'grateful': ['thank', 'grateful', 'appreciate', 'thanks'],
+                'confused': ['confused', 'don\'t understand', 'unclear', 'lost']
+            }
+            
+            message_lower = message.lower()
+            detected_emotions = []
+            emotional_intensity = 0.0
+            
+            for emotion, keywords in emotions.items():
+                if any(keyword in message_lower for keyword in keywords):
+                    detected_emotions.append(emotion)
+                    emotional_intensity += 0.3
+            
+            # Detect emotional markers
+            exclamation_count = message.count('!')
+            question_count = message.count('?')
+            caps_ratio = sum(1 for c in message if c.isupper()) / len(message) if message else 0
+            
+            # Adjust intensity based on markers
+            emotional_intensity += min(exclamation_count * 0.1, 0.3)
+            emotional_intensity += min(caps_ratio * 0.5, 0.4)
+            
+            return {
+                'detected_emotions': detected_emotions,
+                'primary_emotion': detected_emotions[0] if detected_emotions else 'neutral',
+                'emotional_intensity': min(emotional_intensity, 1.0),
+                'exclamation_count': exclamation_count,
+                'question_count': question_count,
+                'caps_ratio': caps_ratio,
+                'requires_empathy': emotional_intensity > 0.5,
+                'requires_followup': any(emotion in ['negative', 'anxious'] for emotion in detected_emotions)
+            }
+            
+        except Exception as e:
+            logger.error(f"Emotional analysis failed: {e}")
+            return {'detected_emotions': [], 'primary_emotion': 'neutral', 'emotional_intensity': 0.0}
+    
+    def _analyze_intent(self, message: str, emotional_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analyze user intent from message
+        
+        Args:
+            message: User message
+            emotional_context: Emotional analysis results
+            
+        Returns:
+            Intent analysis results
+        """
+        try:
+            intents = {
+                'question': ['what', 'how', 'why', 'when', 'where', 'who', '?'],
+                'request': ['can you', 'could you', 'please', 'help me'],
+                'sharing': ['i feel', 'i think', 'i want', 'i need', 'my'],
+                'greeting': ['hello', 'hi', 'hey', 'good morning', 'good evening'],
+                'goodbye': ['bye', 'goodbye', 'see you', 'talk later'],
+                'gratitude': ['thank you', 'thanks', 'appreciate'],
+                'complaint': ['problem', 'issue', 'wrong', 'broken', 'error'],
+                'compliment': ['great', 'awesome', 'amazing', 'wonderful', 'perfect']
+            }
+            
+            message_lower = message.lower()
+            detected_intents = []
+            
+            for intent, keywords in intents.items():
+                if any(keyword in message_lower for keyword in keywords):
+                    detected_intents.append(intent)
+            
+            # Determine primary intent
+            primary_intent = 'conversation'  # Default
+            if detected_intents:
+                # Priority order for intents
+                intent_priority = ['greeting', 'goodbye', 'gratitude', 'complaint', 
+                                 'question', 'request', 'sharing', 'compliment']
+                for intent in intent_priority:
+                    if intent in detected_intents:
+                        primary_intent = intent
+                        break
+            
+            # Determine response style needed
+            response_style = 'conversational'
+            if primary_intent == 'question':
+                response_style = 'informative'
+            elif primary_intent in ['complaint', 'sharing'] and emotional_context['requires_empathy']:
+                response_style = 'empathetic'
+            elif primary_intent == 'request':
+                response_style = 'helpful'
+            
+            return {
+                'detected_intents': detected_intents,
+                'primary_intent': primary_intent,
+                'response_style': response_style,
+                'needs_action': primary_intent in ['request', 'complaint'],
+                'is_emotional': emotional_context['emotional_intensity'] > 0.3
+            }
+            
+        except Exception as e:
+            logger.error(f"Intent analysis failed: {e}")
+            return {'primary_intent': 'conversation', 'response_style': 'conversational'}
+    
+    def _build_memory_context(self, message: str, emotional_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build relevant memory context for response generation
+        
+        Args:
+            message: User message
+            emotional_context: Emotional analysis
+            
+        Returns:
+            Memory context for prompt building
+        """
+        try:
+            # Get recent conversation context
+            recent_messages = self.memory.get_conversation_context(max_messages=5)
+            
+            # Get emotional profile
+            emotional_profile = self.memory.get_emotional_profile()
+            
+            # Search for relevant memories based on message content
+            relevant_memories = self.memory.search_memories(
+                importance_threshold=6,
+                limit=3
+            )
+            
+            # Get user preferences if emotional situation
+            user_preferences = {}
+            if emotional_context['requires_empathy']:
+                pref_memories = self.memory.search_memories(
+                    memory_type='emotional',
+                    tags=['preferences'],
+                    limit=5
+                )
+                for mem in pref_memories:
+                    if 'communication_style' in mem['content']:
+                        user_preferences['communication_style'] = mem['content']['communication_style']
+            
+            return {
+                'recent_messages': recent_messages[-3:] if recent_messages else [],  # Last 3 messages
+                'emotional_profile': emotional_profile,
+                'relevant_memories': relevant_memories,
+                'user_preferences': user_preferences,
+                'conversation_length': len(recent_messages),
+                'has_context': len(recent_messages) > 0 or len(relevant_memories) > 0
+            }
+            
+        except Exception as e:
+            logger.error(f"Memory context building failed: {e}")
+            return {'has_context': False, 'recent_messages': []}
+    
+    def _build_prompt(self, user_message: str, memory_context: Dict[str, Any],
+                     emotional_context: Dict[str, Any], intent: Dict[str, Any],
+                     context_hint: str = None) -> Dict[str, Any]:
+        """
+        Build comprehensive prompt for AI response generation
+        
+        Args:
+            user_message: User's message
+            memory_context: Memory and context information
+            emotional_context: Emotional analysis
+            intent: Intent analysis
+            context_hint: Optional context hint
+            
+        Returns:
+            Structured prompt data
+        """
+        try:
+            # Build system prompt
+            system_prompt = self.being_code
+            
+            # Add emotional guidance
+            if emotional_context['requires_empathy']:
+                system_prompt += f"\n\nThe user is experiencing {emotional_context['primary_emotion']} emotions. Respond with extra empathy and care."
+            
+            # Add communication style preferences
+            user_prefs = memory_context.get('user_preferences', {})
+            if 'communication_style' in user_prefs:
+                style = user_prefs['communication_style']
+                system_prompt += f"\n\nUser prefers {style} communication style. Adapt accordingly."
+            
+            # Add response style guidance
+            style_guidance = {
+                'empathetic': "Prioritize emotional validation and support.",
+                'informative': "Provide clear, helpful information.",
+                'helpful': "Focus on practical assistance and solutions.",
+                'conversational': "Maintain natural, engaging conversation."
+            }
+            
+            if intent['response_style'] in style_guidance:
+                system_prompt += f"\n\n{style_guidance[intent['response_style']]}"
+            
+            # Build conversation history
+            conversation = []
+            
+            # Add relevant memories as context (from past sessions)
+            if memory_context.get('recent_messages'):
+                memory_context_str = "Context from our previous conversations:\n"
+                for msg in memory_context['recent_messages'][-3:]:  # Last 3 from database
+                    content = msg.get('content', {})
+                    if 'messages' in content:
+                        for message in content['messages']:
+                            role = message.get('role', 'user')
+                            text = message.get('content', '')[:150]  # First 150 chars
+                            memory_context_str += f"{role.capitalize()}: {text}\n"
+                
+                if len(memory_context_str) > 50:  # Only add if we have content
+                    conversation.append({"role": "system", "content": memory_context_str.strip()})
+            
+            # Add in-memory conversation history from THIS SESSION
+            # This ensures continuity within the current conversation
+            for conv in self.conversation_history[-5:]:  # Last 5 from current session
+                conversation.append({"role": "user", "content": conv['user_message']})
+                conversation.append({"role": "assistant", "content": conv['ai_response']})
+            
+            # Add current user message
+            conversation.append({"role": "user", "content": user_message})
+            
+            # Log what we're sending (for debugging)
+            logger.info(f"Prompt built with {len(conversation)} messages, "
+                       f"including {len(self.conversation_history)} from current session, "
+                       f"memory_context: {memory_context.get('has_context', False)}")
+            
+            return {
+                'system_prompt': system_prompt,
+                'conversation': conversation,
+                'emotional_context': emotional_context,
+                'intent': intent,
+                'context_hint': context_hint,
+                'user_preferences': user_prefs,
+                'has_memory_context': memory_context['has_context'] or len(self.conversation_history) > 0
+            }
+            
+        except Exception as e:
+            logger.error(f"Prompt building failed: {e}")
+            return {
+                'system_prompt': self.being_code,
+                'conversation': [{"role": "user", "content": user_message}],
+                'has_memory_context': False
+            }
+    
+    async def _generate_ai_response(self, prompt_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate AI response using OpenAI API with fallback handling
+        
+        Args:
+            prompt_data: Structured prompt data
+            
+        Returns:
+            AI response data
+        """
+        try:
+            # Prepare messages for OpenAI
+            messages = [{"role": "system", "content": prompt_data['system_prompt']}]
+            messages.extend(prompt_data['conversation'])
+            
+            # 🎯 SMART MODEL SELECTION
+            emotional_context = prompt_data.get('emotional_context', {})
+            intent = prompt_data.get('intent', {})
+            
+            # Get last user message for length check
+            user_message = ""
+            for msg in reversed(messages):
+                if msg['role'] == 'user':
+                    user_message = msg['content']
+                    break
+            
+            # Select optimal model
+            selected_model, max_tokens = self._select_model(
+                emotional_context, 
+                intent, 
+                len(user_message)
+            )
+            
+            # Try selected model first, then fallbacks
+            models_to_try = [
+                selected_model,
+                self.model_config['fallback'],
+                self.model_config['emergency']
+            ]
+            
+            for model in models_to_try:
+                try:
+                    response = self.openai_client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=self.model_config['temperature']
+                    )
+                    
+                    return {
+                        'content': response.choices[0].message.content,
+                        'model_used': model,
+                        'tokens_used': response.usage.total_tokens,
+                        'finish_reason': response.choices[0].finish_reason,
+                        'success': True
+                    }
+                    
+                except Exception as model_error:
+                    logger.warning(f"Model {model} failed: {model_error}")
+                    continue
+            
+            # If all models fail, return fallback response
+            return self._create_fallback_response(prompt_data)
+            
+        except Exception as e:
+            logger.error(f"AI response generation failed: {e}")
+            return self._create_fallback_response(prompt_data)
+    
+    def _create_fallback_response(self, prompt_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create intelligent fallback response when AI is unavailable"""
+        try:
+            emotional_context = prompt_data.get('emotional_context', {})
+            intent = prompt_data.get('intent', {})
+            
+            # Emotionally appropriate fallback responses
+            if emotional_context.get('requires_empathy', False):
+                fallback_content = "I can sense this is important to you, and I want to give you the thoughtful response you deserve. I'm having some technical difficulties right now, but I'm here with you. Could you try again in just a moment?"
+            elif intent.get('primary_intent') == 'question':
+                fallback_content = "That's a great question, and I want to give you a complete answer. I'm experiencing some connectivity issues right now. Please try asking again in a moment, and I'll do my best to help."
+            elif intent.get('primary_intent') == 'greeting':
+                fallback_content = "Hello! I'm so glad you're here. I'm having a brief technical hiccup, but I should be back to full capacity in just a moment. How are you doing today?"
+            else:
+                fallback_content = "I'm having trouble accessing my full capabilities right now, but I'm still here with you. Please try again in a moment, and I'll be ready to continue our conversation."
+            
+            return {
+                'content': fallback_content,
+                'model_used': 'fallback',
+                'tokens_used': 0,
+                'is_fallback': True,
+                'success': True
+            }
+            
+        except Exception as e:
+            logger.error(f"Fallback response creation failed: {e}")
+            return {
+                'content': "I'm experiencing technical difficulties. Please try again shortly.",
+                'model_used': 'emergency',
+                'tokens_used': 0,
+                'is_fallback': True,
+                'success': False
+            }
+    
+    async def _process_ai_response(self, user_message: str, ai_response: Dict[str, Any],
+                                 emotional_context: Dict[str, Any], 
+                                 memory_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process AI response and store relevant memories
+        
+        Args:
+            user_message: Original user message
+            ai_response: Generated AI response
+            emotional_context: Emotional analysis
+            memory_context: Memory context used
             
         Returns:
             Processed response data with metadata
@@ -482,397 +962,3 @@ if __name__ == "__main__":
         print(f"\nMessage: {msg}")
         # Would test emotional analysis, intent detection, etc.
         print("  (Analysis would appear here with full setup)")
-
-            Dictionary containing response and metadata
-        """
-        try:
-            # Validate and sanitize input
-            clean_message = DataValidator.sanitize_user_input(user_message)
-            if not clean_message:
-                return self._create_error_response("Message could not be processed")
-            
-            # Analyze emotional context
-            emotional_analysis = self._analyze_emotional_context(clean_message)
-            
-            # Retrieve relevant memories
-            memory_context = self._build_memory_context(clean_message, emotional_analysis)
-            
-            # Detect user intent
-            intent_analysis = self._analyze_intent(clean_message, emotional_analysis)
-            
-            # Build comprehensive prompt
-            prompt_data = self._build_prompt(
-                user_message=clean_message,
-                memory_context=memory_context,
-                emotional_context=emotional_analysis,
-                intent=intent_analysis,
-                context_hint=context_hint
-            )
-            
-            # Generate AI response
-            ai_response = await self._generate_ai_response(prompt_data)
-            
-            # Process and store response
-            response_data = await self._process_ai_response(
-                user_message=clean_message,
-                ai_response=ai_response,
-                emotional_context=emotional_analysis,
-                memory_context=memory_context
-            )
-            
-            return response_data
-            
-        except Exception as e:
-            logger.error(f"Message processing failed: {e}")
-            return self._create_error_response("I'm having trouble processing your message right now.")
-    
-    def _analyze_emotional_context(self, message: str) -> Dict[str, Any]:
-        """
-        Analyze emotional context of user message
-        
-        Args:
-            message: User message to analyze
-            
-        Returns:
-            Emotional analysis results
-        """
-        try:
-            # Simple emotion detection (in production, use more sophisticated NLP)
-            emotions = {
-                'positive': ['happy', 'excited', 'great', 'awesome', 'love', 'wonderful'],
-                'negative': ['sad', 'angry', 'frustrated', 'upset', 'hate', 'terrible'],
-                'anxious': ['worried', 'nervous', 'anxious', 'stressed', 'concerned'],
-                'grateful': ['thank', 'grateful', 'appreciate', 'thanks'],
-                'confused': ['confused', 'don\'t understand', 'unclear', 'lost']
-            }
-            
-            message_lower = message.lower()
-            detected_emotions = []
-            emotional_intensity = 0.0
-            
-            for emotion, keywords in emotions.items():
-                if any(keyword in message_lower for keyword in keywords):
-                    detected_emotions.append(emotion)
-                    emotional_intensity += 0.3
-            
-            # Detect emotional markers
-            exclamation_count = message.count('!')
-            question_count = message.count('?')
-            caps_ratio = sum(1 for c in message if c.isupper()) / len(message) if message else 0
-            
-            # Adjust intensity based on markers
-            emotional_intensity += min(exclamation_count * 0.1, 0.3)
-            emotional_intensity += min(caps_ratio * 0.5, 0.4)
-            
-            return {
-                'detected_emotions': detected_emotions,
-                'primary_emotion': detected_emotions[0] if detected_emotions else 'neutral',
-                'emotional_intensity': min(emotional_intensity, 1.0),
-                'exclamation_count': exclamation_count,
-                'question_count': question_count,
-                'caps_ratio': caps_ratio,
-                'requires_empathy': emotional_intensity > 0.5,
-                'requires_followup': any(emotion in ['negative', 'anxious'] for emotion in detected_emotions)
-            }
-            
-        except Exception as e:
-            logger.error(f"Emotional analysis failed: {e}")
-            return {'detected_emotions': [], 'primary_emotion': 'neutral', 'emotional_intensity': 0.0}
-    
-    def _analyze_intent(self, message: str, emotional_context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Analyze user intent from message
-        
-        Args:
-            message: User message
-            emotional_context: Emotional analysis results
-            
-        Returns:
-            Intent analysis results
-        """
-        try:
-            intents = {
-                'question': ['what', 'how', 'why', 'when', 'where', 'who', '?'],
-                'request': ['can you', 'could you', 'please', 'help me'],
-                'sharing': ['i feel', 'i think', 'i want', 'i need', 'my'],
-                'greeting': ['hello', 'hi', 'hey', 'good morning', 'good evening'],
-                'goodbye': ['bye', 'goodbye', 'see you', 'talk later'],
-                'gratitude': ['thank you', 'thanks', 'appreciate'],
-                'complaint': ['problem', 'issue', 'wrong', 'broken', 'error'],
-                'compliment': ['great', 'awesome', 'amazing', 'wonderful', 'perfect']
-            }
-            
-            message_lower = message.lower()
-            detected_intents = []
-            
-            for intent, keywords in intents.items():
-                if any(keyword in message_lower for keyword in keywords):
-                    detected_intents.append(intent)
-            
-            # Determine primary intent
-            primary_intent = 'conversation'  # Default
-            if detected_intents:
-                # Priority order for intents
-                intent_priority = ['greeting', 'goodbye', 'gratitude', 'complaint', 
-                                 'question', 'request', 'sharing', 'compliment']
-                for intent in intent_priority:
-                    if intent in detected_intents:
-                        primary_intent = intent
-                        break
-            
-            # Determine response style needed
-            response_style = 'conversational'
-            if primary_intent == 'question':
-                response_style = 'informative'
-            elif primary_intent in ['complaint', 'sharing'] and emotional_context['requires_empathy']:
-                response_style = 'empathetic'
-            elif primary_intent == 'request':
-                response_style = 'helpful'
-            
-            return {
-                'detected_intents': detected_intents,
-                'primary_intent': primary_intent,
-                'response_style': response_style,
-                'needs_action': primary_intent in ['request', 'complaint'],
-                'is_emotional': emotional_context['emotional_intensity'] > 0.3
-            }
-            
-        except Exception as e:
-            logger.error(f"Intent analysis failed: {e}")
-            return {'primary_intent': 'conversation', 'response_style': 'conversational'}
-    
-    def _build_memory_context(self, message: str, emotional_context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Build relevant memory context for response generation
-        
-        Args:
-            message: User message
-            emotional_context: Emotional analysis
-            
-        Returns:
-            Memory context for prompt building
-        """
-        try:
-            # Get recent conversation context
-            recent_messages = self.memory.get_conversation_context(max_messages=5)
-            
-            # Get emotional profile
-            emotional_profile = self.memory.get_emotional_profile()
-            
-            # Search for relevant memories based on message content
-            relevant_memories = self.memory.search_memories(
-                importance_threshold=6,
-                limit=3
-            )
-            
-            # Get user preferences if emotional situation
-            user_preferences = {}
-            if emotional_context['requires_empathy']:
-                pref_memories = self.memory.search_memories(
-                    memory_type='emotional',
-                    tags=['preferences'],
-                    limit=5
-                )
-                for mem in pref_memories:
-                    if 'communication_style' in mem['content']:
-                        user_preferences['communication_style'] = mem['content']['communication_style']
-            
-            return {
-                'recent_messages': recent_messages[-3:] if recent_messages else [],  # Last 3 messages
-                'emotional_profile': emotional_profile,
-                'relevant_memories': relevant_memories,
-                'user_preferences': user_preferences,
-                'conversation_length': len(recent_messages),
-                'has_context': len(recent_messages) > 0 or len(relevant_memories) > 0
-            }
-            
-        except Exception as e:
-            logger.error(f"Memory context building failed: {e}")
-            return {'has_context': False, 'recent_messages': []}
-    
-    def _build_prompt(self, user_message: str, memory_context: Dict[str, Any],
-                     emotional_context: Dict[str, Any], intent: Dict[str, Any],
-                     context_hint: str = None) -> Dict[str, Any]:
-        """
-        Build comprehensive prompt for AI response generation
-        
-        Args:
-            user_message: User's message
-            memory_context: Memory and context information
-            emotional_context: Emotional analysis
-            intent: Intent analysis
-            context_hint: Optional context hint
-            
-        Returns:
-            Structured prompt data
-        """
-        try:
-            # Build system prompt
-            system_prompt = self.being_code
-            
-            # Add emotional guidance
-            if emotional_context['requires_empathy']:
-                system_prompt += f"\n\nThe user is experiencing {emotional_context['primary_emotion']} emotions. Respond with extra empathy and care."
-            
-            # Add communication style preferences
-            user_prefs = memory_context.get('user_preferences', {})
-            if 'communication_style' in user_prefs:
-                style = user_prefs['communication_style']
-                system_prompt += f"\n\nUser prefers {style} communication style. Adapt accordingly."
-            
-            # Add response style guidance
-            style_guidance = {
-                'empathetic': "Prioritize emotional validation and support.",
-                'informative': "Provide clear, helpful information.",
-                'helpful': "Focus on practical assistance and solutions.",
-                'conversational': "Maintain natural, engaging conversation."
-            }
-            
-            if intent['response_style'] in style_guidance:
-                system_prompt += f"\n\n{style_guidance[intent['response_style']]}"
-            
-            # Build conversation history
-            conversation = []
-            
-            # Add relevant memories as context
-            if memory_context['relevant_memories']:
-                memory_context_str = "Relevant context from our past conversations:\n"
-                for memory in memory_context['relevant_memories'][-2:]:  # Last 2 relevant memories
-                    content = memory['content']
-                    if 'messages' in content:
-                        # Conversational memory
-                        last_exchange = content['messages'][-2:] if content['messages'] else []
-                        for msg in last_exchange:
-                            memory_context_str += f"- {msg.get('role', 'user')}: {msg.get('content', '')[:100]}...\n"
-                    else:
-                        # Other memory types
-                        memory_context_str += f"- {str(content)[:100]}...\n"
-                
-                conversation.append({"role": "system", "content": memory_context_str})
-            
-            # Add recent conversation context
-            for msg in memory_context['recent_messages']:
-                for message in msg['content'].get('messages', []):
-                    conversation.append({
-                        "role": message.get('role', 'user'),
-                        "content": message.get('content', '')
-                    })
-            
-            # Add current user message
-            conversation.append({"role": "user", "content": user_message})
-            
-            return {
-                'system_prompt': system_prompt,
-                'conversation': conversation,
-                'emotional_context': emotional_context,
-                'intent': intent,
-                'context_hint': context_hint,
-                'user_preferences': user_prefs,
-                'has_memory_context': memory_context['has_context']
-            }
-            
-        except Exception as e:
-            logger.error(f"Prompt building failed: {e}")
-            return {
-                'system_prompt': self.being_code,
-                'conversation': [{"role": "user", "content": user_message}],
-                'has_memory_context': False
-            }
-    
-    async def _generate_ai_response(self, prompt_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate AI response using OpenAI API with fallback handling
-        
-        Args:
-            prompt_data: Structured prompt data
-            
-        Returns:
-            AI response data
-        """
-        try:
-            # Prepare messages for OpenAI
-            messages = [{"role": "system", "content": prompt_data['system_prompt']}]
-            messages.extend(prompt_data['conversation'])
-            
-            # Try primary model first
-            models_to_try = [
-                self.model_config['primary'],
-                self.model_config['fallback'],
-                self.model_config['emergency']
-            ]
-            
-            for model in models_to_try:
-                try:
-                    response = self.openai_client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        max_tokens=self.model_config['max_tokens'],
-                        temperature=self.model_config['temperature']
-                    )
-                    
-                    return {
-                        'content': response.choices[0].message.content,
-                        'model_used': model,
-                        'tokens_used': response.usage.total_tokens,
-                        'finish_reason': response.choices[0].finish_reason,
-                        'success': True
-                    }
-                    
-                except Exception as model_error:
-                    logger.warning(f"Model {model} failed: {model_error}")
-                    continue
-            
-            # If all models fail, return fallback response
-            return self._create_fallback_response(prompt_data)
-            
-        except Exception as e:
-            logger.error(f"AI response generation failed: {e}")
-            return self._create_fallback_response(prompt_data)
-    
-    def _create_fallback_response(self, prompt_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create intelligent fallback response when AI is unavailable"""
-        try:
-            emotional_context = prompt_data.get('emotional_context', {})
-            intent = prompt_data.get('intent', {})
-            
-            # Emotionally appropriate fallback responses
-            if emotional_context.get('requires_empathy', False):
-                fallback_content = "I can sense this is important to you, and I want to give you the thoughtful response you deserve. I'm having some technical difficulties right now, but I'm here with you. Could you try again in just a moment?"
-            elif intent.get('primary_intent') == 'question':
-                fallback_content = "That's a great question, and I want to give you a complete answer. I'm experiencing some connectivity issues right now. Please try asking again in a moment, and I'll do my best to help."
-            elif intent.get('primary_intent') == 'greeting':
-                fallback_content = "Hello! I'm so glad you're here. I'm having a brief technical hiccup, but I should be back to full capacity in just a moment. How are you doing today?"
-            else:
-                fallback_content = "I'm having trouble accessing my full capabilities right now, but I'm still here with you. Please try again in a moment, and I'll be ready to continue our conversation."
-            
-            return {
-                'content': fallback_content,
-                'model_used': 'fallback',
-                'tokens_used': 0,
-                'is_fallback': True,
-                'success': True
-            }
-            
-        except Exception as e:
-            logger.error(f"Fallback response creation failed: {e}")
-            return {
-                'content': "I'm experiencing technical difficulties. Please try again shortly.",
-                'model_used': 'emergency',
-                'tokens_used': 0,
-                'is_fallback': True,
-                'success': False
-            }
-    
-    async def _process_ai_response(self, user_message: str, ai_response: Dict[str, Any],
-                                 emotional_context: Dict[str, Any], 
-                                 memory_context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Process AI response and store relevant memories
-        
-        Args:
-            user_message: Original user message
-            ai_response: Generated AI response
-            emotional_context: Emotional analysis
-            memory_context: Memory context used
-            
-        Returns:
