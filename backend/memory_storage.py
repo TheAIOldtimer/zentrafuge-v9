@@ -486,13 +486,3 @@ class MemoryStorage:
         except Exception as e:
             logger.error(f"Memory stats failed: {e}")
             return {}
-```
-
-## 2. How to Set Up Firebase Indexes
-
-The errors gave you direct links. Here's how to create them:
-
-### Step 1: Click the Index Link
-From your error log, click this link (it's custom-generated for your project):
-```
-https://console.firebase.google.com/v1/r/project/zentrafuge-v9-uk-veterans/firestore/indexes?create_composite=...
