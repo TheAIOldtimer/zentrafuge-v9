@@ -124,7 +124,7 @@ class MemoryStorage:
     def search_memories(self, memory_type: str = None, tags: List[str] = None,
                        importance_threshold: int = 1, limit: int = 20) -> List[Dict[Any, Any]]:
         """
-        Search memories with filters
+        Search memories with filters (gracefully handles missing indexes)
         
         Args:
             memory_type: Filter by memory type
@@ -136,21 +136,25 @@ class MemoryStorage:
             List of matching decrypted memories
         """
         try:
+            # Simple query to avoid index requirements
             query = self.db.collection(self.memory_collection)\
                            .where('active', '==', True)\
-                           .where('importance', '>=', importance_threshold)
-            
-            if memory_type:
-                query = query.where('memory_type', '==', memory_type)
+                           .limit(limit * 2)  # Get extra to filter in Python
             
             # Execute query
-            docs = query.order_by('importance', direction=firestore.Query.DESCENDING)\
-                       .order_by('created_at', direction=firestore.Query.DESCENDING)\
-                       .limit(limit).stream()
+            docs = query.stream()
             
             memories = []
             for doc in docs:
                 memory_data = doc.to_dict()
+                
+                # Filter by memory type if specified
+                if memory_type and memory_data.get('memory_type') != memory_type:
+                    continue
+                
+                # Filter by importance threshold
+                if memory_data.get('importance', 0) < importance_threshold:
+                    continue
                 
                 # Filter by tags if specified
                 if tags and not all(tag in memory_data.get('tags', []) for tag in tags):
@@ -175,10 +179,14 @@ class MemoryStorage:
                     logger.error(f"Failed to decrypt memory {doc.id}: {decrypt_error}")
                     continue
             
-            return memories
+            # Sort by importance and creation time in Python
+            memories.sort(key=lambda x: (x['importance'], x['created_at']), reverse=True)
+            
+            return memories[:limit]
             
         except Exception as e:
             logger.error(f"Memory search failed: {e}")
+            # Return empty list instead of crashing
             return []
     
     def get_conversation_context(self, max_messages: int = 10) -> List[Dict[Any, Any]]:
@@ -191,11 +199,52 @@ class MemoryStorage:
         Returns:
             List of recent conversation memories
         """
-        return self.search_memories(
-            memory_type='conversational',
-            importance_threshold=3,
-            limit=max_messages
-        )
+        try:
+            # Simple query to avoid index issues
+            query = self.db.collection(self.memory_collection)\
+                           .where('active', '==', True)\
+                           .limit(max_messages * 3)  # Get extra to filter in Python
+            
+            docs = query.stream()
+            
+            memories = []
+            for doc in docs:
+                memory_data = doc.to_dict()
+                
+                # Filter for conversational memories only
+                if memory_data.get('memory_type') != 'conversational':
+                    continue
+                
+                # Filter by importance threshold
+                if memory_data.get('importance', 0) < 3:
+                    continue
+                
+                try:
+                    encrypted_content = memory_data['encrypted_content']
+                    decrypted_json = self.encryption.decrypt_data(encrypted_content)
+                    content = json.loads(decrypted_json)
+                    
+                    memories.append({
+                        'memory_id': memory_data['memory_id'],
+                        'memory_type': memory_data['memory_type'],
+                        'content': content,
+                        'importance': memory_data['importance'],
+                        'tags': memory_data['tags'],
+                        'created_at': memory_data['created_at']
+                    })
+                    
+                except Exception as decrypt_error:
+                    logger.error(f"Failed to decrypt memory {doc.id}: {decrypt_error}")
+                    continue
+            
+            # Sort by creation time (newest first)
+            memories.sort(key=lambda x: x['created_at'], reverse=True)
+            
+            return memories[:max_messages]
+            
+        except Exception as e:
+            logger.error(f"Conversation context retrieval failed: {e}")
+            return []
     
     def get_emotional_profile(self) -> Dict[str, Any]:
         """
@@ -367,15 +416,25 @@ class MemoryStorage:
         try:
             cutoff_date = datetime.utcnow() - timedelta(days=days_threshold)
             
-            # Query old, low-importance memories
+            # Query old, low-importance memories (simplified to avoid indexes)
             query = self.db.collection(self.memory_collection)\
-                           .where('importance', '<', importance_threshold)\
-                           .where('created_at', '<', cutoff_date.isoformat())
+                           .where('active', '==', True)\
+                           .limit(500)
             
             batch = self.db.batch()
             deleted_count = 0
             
             for doc in query.stream():
+                data = doc.to_dict()
+                
+                # Filter in Python
+                if data.get('importance', 10) >= importance_threshold:
+                    continue
+                    
+                created_at = datetime.fromisoformat(data.get('created_at', datetime.utcnow().isoformat()))
+                if created_at >= cutoff_date:
+                    continue
+                
                 batch.delete(doc.reference)
                 deleted_count += 1
                 
@@ -427,3 +486,13 @@ class MemoryStorage:
         except Exception as e:
             logger.error(f"Memory stats failed: {e}")
             return {}
+```
+
+## 2. How to Set Up Firebase Indexes
+
+The errors gave you direct links. Here's how to create them:
+
+### Step 1: Click the Index Link
+From your error log, click this link (it's custom-generated for your project):
+```
+https://console.firebase.google.com/v1/r/project/zentrafuge-v9-uk-veterans/firestore/indexes?create_composite=...
