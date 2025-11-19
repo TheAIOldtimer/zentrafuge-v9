@@ -8,10 +8,12 @@ import os
 import base64
 import secrets
 import logging
-from typing import str, bytes
+from typing import Optional  # ✅ FIXED THIS LINE
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+# ... rest of the file stays the same
 
 logger = logging.getLogger(__name__)
 
