@@ -35,7 +35,7 @@ export async function submitOnboarding(token, onboardingData) {
 }
 
 export async function sendChatMessage(token, message) {
-  const response = await fetch(`${Config.API_BASE}/index`, {  // ✅ updated
+  const response = await fetch(`${Config.API_BASE}/index`, {  // ✅ Memory-enabled endpoint
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -43,11 +43,10 @@ export async function sendChatMessage(token, message) {
     },
     body: JSON.stringify({ message })
   });
-
+  
   if (!response.ok) {
     throw new Error(`Chat message failed: ${response.status}`);
   }
-
+  
   return response.json();
 }
-
