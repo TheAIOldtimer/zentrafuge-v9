@@ -119,7 +119,9 @@ async function checkAuthentication() {
       name: user.displayName,
     });
 
-    showWelcomeMessage();
+    // Show smart welcome message (changed from showWelcomeMessage)
+    await showSmartWelcomeMessage();
+    
   } catch (error) {
     console.error('❌ Authentication check failed:', error);
 
@@ -138,6 +140,54 @@ async function checkAuthentication() {
     }
 
     setInputState(false);
+  }
+}
+
+// NEW: Smart welcome message that checks conversation history
+async function showSmartWelcomeMessage() {
+  try {
+    // Check if user has any previous messages
+    const token = await currentUser.getIdToken();
+    
+    // Try to get conversation summary to see if this is first chat
+    const summaryResponse = await fetch(`${Config.API_BASE}/conversation/summary`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (summaryResponse.ok) {
+      const summary = await summaryResponse.json();
+      
+      if (summary.summary && summary.summary.message_count > 0) {
+        // Returning user - show personalized greeting
+        addMessage(
+          "Welcome back! I remember our previous conversations. What would you like to talk about?",
+          'assistant'
+        );
+      } else {
+        // First time user - show full introduction
+        addMessage(
+          "Hello! I'm Cael, your AI companion. I'm here to learn about you and grow alongside you. What would you like to talk about today?",
+          'assistant'
+        );
+      }
+    } else {
+      // Fallback to simple greeting if summary fails
+      addMessage(
+        "Hello! What would you like to talk about today?",
+        'assistant'
+      );
+    }
+  } catch (error) {
+    console.error('Error checking conversation history:', error);
+    // Fallback greeting
+    addMessage(
+      "Hello! What would you like to talk about today?",
+      'assistant'
+    );
   }
 }
 
@@ -191,6 +241,7 @@ async function handleSendMessage(e) {
   }
 }
 
+// UPDATED: No timestamps
 function addMessage(content, type) {
   if (!chatContainer) return;
 
@@ -198,16 +249,11 @@ function addMessage(content, type) {
   messageDiv.className = `message ${type}`;
 
   const contentDiv = document.createElement('div');
+  contentDiv.className = 'message-content';
   contentDiv.textContent = content;
 
-  const timeDiv = document.createElement('div');
-  timeDiv.className = 'message-time';
-  timeDiv.textContent = new Date().toLocaleTimeString();
-
   messageDiv.appendChild(contentDiv);
-  if (type !== 'system') {
-    messageDiv.appendChild(timeDiv);
-  }
+  // Removed timestamp code
 
   chatContainer.appendChild(messageDiv);
   scrollToBottom();
@@ -238,13 +284,6 @@ function hideTypingIndicator() {
   if (indicator) {
     indicator.remove();
   }
-}
-
-function showWelcomeMessage() {
-  addMessage(
-    "Hello! I'm Cael, your AI companion. I'm here to learn about you and grow alongside you. What would you like to talk about today?",
-    'assistant'
-  );
 }
 
 function setInputState(enabled) {
