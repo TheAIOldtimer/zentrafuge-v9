@@ -351,32 +351,33 @@ class CaelOrchestrator:
             # Build conversation history
             conversation = []
             
-            # Add relevant memories as context
-            if memory_context['relevant_memories']:
-                memory_context_str = "Relevant context from our past conversations:\n"
-                for memory in memory_context['relevant_memories'][-2:]:  # Last 2 relevant memories
-                    content = memory['content']
+            # Add relevant memories as context (from past sessions)
+            if memory_context.get('recent_messages'):
+                memory_context_str = "Context from our previous conversations:\n"
+                for msg in memory_context['recent_messages'][-3:]:  # Last 3 from database
+                    content = msg.get('content', {})
                     if 'messages' in content:
-                        # Conversational memory
-                        last_exchange = content['messages'][-2:] if content['messages'] else []
-                        for msg in last_exchange:
-                            memory_context_str += f"- {msg.get('role', 'user')}: {msg.get('content', '')[:100]}...\n"
-                    else:
-                        # Other memory types
-                        memory_context_str += f"- {str(content)[:100]}...\n"
+                        for message in content['messages']:
+                            role = message.get('role', 'user')
+                            text = message.get('content', '')[:150]  # First 150 chars
+                            memory_context_str += f"{role.capitalize()}: {text}\n"
                 
-                conversation.append({"role": "system", "content": memory_context_str})
+                if len(memory_context_str) > 50:  # Only add if we have content
+                    conversation.append({"role": "system", "content": memory_context_str.strip()})
             
-            # Add recent conversation context
-            for msg in memory_context['recent_messages']:
-                for message in msg['content'].get('messages', []):
-                    conversation.append({
-                        "role": message.get('role', 'user'),
-                        "content": message.get('content', '')
-                    })
+            # Add in-memory conversation history from THIS SESSION
+            # This ensures continuity within the current conversation
+            for conv in self.conversation_history[-5:]:  # Last 5 from current session
+                conversation.append({"role": "user", "content": conv['user_message']})
+                conversation.append({"role": "assistant", "content": conv['ai_response']})
             
             # Add current user message
             conversation.append({"role": "user", "content": user_message})
+            
+            # Log what we're sending (for debugging)
+            logger.info(f"Prompt built with {len(conversation)} messages, "
+                       f"including {len(self.conversation_history)} from current session, "
+                       f"memory_context: {memory_context.get('has_context', False)}")
             
             return {
                 'system_prompt': system_prompt,
@@ -385,7 +386,7 @@ class CaelOrchestrator:
                 'intent': intent,
                 'context_hint': context_hint,
                 'user_preferences': user_prefs,
-                'has_memory_context': memory_context['has_context']
+                'has_memory_context': memory_context['has_context'] or len(self.conversation_history) > 0
             }
             
         except Exception as e:
