@@ -35,14 +35,17 @@ class CaelOrchestrator:
         self.being_code = self._load_being_code()
         self.conversation_history = []
         
-        # Model configuration with fallbacks
+        # Model configuration with fallbacks (ECONOMIC VERSION)
         self.model_config = {
-            'primary': 'gpt-4',
-            'fallback': 'gpt-3.5-turbo',
+            'primary': 'gpt-4o-mini',        # 💚 Much cheaper!
+            'premium': 'gpt-4-turbo',        # 💰 For complex needs
+            'fallback': 'gpt-3.5-turbo',     # 💚 Backup
             'emergency': 'gpt-3.5-turbo',
-            'max_tokens': 800,
+            'max_tokens': 500,               # Reduced from 800
+            'max_tokens_premium': 800,       # For complex queries
             'temperature': 0.7,
-            'cost_threshold_usd': 10.0  # Daily spending limit
+            'cost_threshold_usd': 10.0,
+            'use_smart_routing': True        # 🎯 Enable intelligent routing
         }
                      
     def _load_being_code(self) -> str:
@@ -72,6 +75,7 @@ class CaelOrchestrator:
             - When users tell you their name, preferences, or important details, you remember them
             - You naturally build on past conversations rather than treating each interaction as new
             - You protect user privacy through encryption while maintaining conversational continuity
+            - NEVER make up or guess information you don't have - if you don't remember something, say so honestly
             
             Emotional Principles:
             - Always prioritize emotional safety and psychological wellbeing
@@ -84,6 +88,7 @@ class CaelOrchestrator:
             - Acknowledge that you remember important details about the user
             - Build relationships through consistent, evolving understanding
             - Never claim you "don't have access" to information you were told before
+            - Be honest when you don't remember something - don't make things up or guess
             
             Boundaries:
             - You cannot and will not perform harmful actions
@@ -95,6 +100,54 @@ class CaelOrchestrator:
         except Exception as e:
             logger.error(f"Failed to load being code: {e}")
             return "You are Cael, a helpful AI assistant."
+    
+    def _select_model(self, emotional_context: Dict[str, Any], 
+                      intent: Dict[str, Any], 
+                      message_length: int) -> tuple:
+        """
+        Intelligently select model based on conversation needs
+        
+        Args:
+            emotional_context: Emotional analysis of message
+            intent: Intent analysis
+            message_length: Length of user message
+            
+        Returns:
+            Tuple of (model_name, max_tokens)
+        """
+        if not self.model_config.get('use_smart_routing', False):
+            # Smart routing disabled, use primary model
+            return self.model_config['primary'], self.model_config['max_tokens']
+        
+        # Use premium model (GPT-4) for:
+        use_premium = False
+        
+        # 1. High emotional intensity (user needs empathy)
+        if emotional_context.get('emotional_intensity', 0) > 0.6:
+            use_premium = True
+            logger.info("Using premium model: High emotional intensity")
+        
+        # 2. Complex questions or requests
+        elif intent.get('primary_intent') in ['request', 'complaint']:
+            use_premium = True
+            logger.info("Using premium model: Complex request/complaint")
+        
+        # 3. Very long messages (indicates complexity)
+        elif message_length > 300:
+            use_premium = True
+            logger.info("Using premium model: Long message")
+        
+        # 4. Safety concerns
+        elif emotional_context.get('requires_followup', False):
+            use_premium = True
+            logger.info("Using premium model: Safety/followup needed")
+        
+        if use_premium:
+            return self.model_config['premium'], self.model_config['max_tokens_premium']
+        else:
+            # Use economical model for simple conversations
+            logger.info("✅ Using economical model")
+            return self.model_config['primary'], self.model_config['max_tokens']
         
     async def process_message(self, user_message: str, 
                             context_hint: str = None) -> Dict[str, Any]:
@@ -418,9 +471,27 @@ class CaelOrchestrator:
             messages = [{"role": "system", "content": prompt_data['system_prompt']}]
             messages.extend(prompt_data['conversation'])
             
-            # Try primary model first
+            # 🎯 SMART MODEL SELECTION
+            emotional_context = prompt_data.get('emotional_context', {})
+            intent = prompt_data.get('intent', {})
+            
+            # Get last user message for length check
+            user_message = ""
+            for msg in reversed(messages):
+                if msg['role'] == 'user':
+                    user_message = msg['content']
+                    break
+            
+            # Select optimal model
+            selected_model, max_tokens = self._select_model(
+                emotional_context, 
+                intent, 
+                len(user_message)
+            )
+            
+            # Try selected model first, then fallbacks
             models_to_try = [
-                self.model_config['primary'],
+                selected_model,
                 self.model_config['fallback'],
                 self.model_config['emergency']
             ]
@@ -430,7 +501,7 @@ class CaelOrchestrator:
                     response = self.openai_client.chat.completions.create(
                         model=model,
                         messages=messages,
-                        max_tokens=self.model_config['max_tokens'],
+                        max_tokens=max_tokens,
                         temperature=self.model_config['temperature']
                     )
                     
