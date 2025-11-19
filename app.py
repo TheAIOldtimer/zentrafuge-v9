@@ -20,8 +20,8 @@ from firebase_admin import auth, credentials, firestore
 
 from openai import OpenAI  # OpenAI SDK v1.3.0 style
 
-# Import memory and orchestration modules
-from cael_orchestrator import CaelOrchestrator, EmotionalSafetyMonitor
+# Import memory and orchestration modules - CORRECTED NAMES
+from orchestrator import CaelOrchestrator, EmotionalSafetyMonitor
 from memory_storage import MemoryStorage
 
 # -----------------------------------------------------------------------------
