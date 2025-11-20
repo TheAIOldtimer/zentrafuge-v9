@@ -2,6 +2,8 @@
 """
 Zentrafuge v9 - Cael Core Orchestrator
 Intelligent prompt assembly, memory integration, and emotional processing
+
+PATCHED: Fixed memory injection to actually use retrieved memories in conversation context
 """
 
 import json
@@ -384,6 +386,11 @@ class CaelOrchestrator:
                     if "communication_style" in content:
                         user_preferences["communication_style"] = content["communication_style"]
 
+            logger.info(
+                f"🧠 Memory context built: {len(recent_messages)} recent messages, "
+                f"{len(relevant_memories)} relevant memories"
+            )
+
             return {
                 "recent_messages": recent_messages[-3:] if recent_messages else [],
                 "emotional_profile": emotional_profile,
@@ -414,6 +421,8 @@ class CaelOrchestrator:
     ) -> Dict[str, Any]:
         """
         Build comprehensive prompt for AI response generation
+        
+        PATCHED: Now properly injects memories as actual conversation history
         """
         try:
             # Start with core being code
@@ -478,25 +487,27 @@ Curious Support (Gentle Probing):
             if response_style in style_guidance:
                 system_prompt += f"\n\n{style_guidance[response_style]}"
 
-            # Build conversation history
+            # ============================================================
+            # PATCHED: Proper memory injection
+            # ============================================================
             conversation: List[Dict[str, str]] = []
 
-            # Add relevant memories as context (from past sessions)
+            # Add relevant memories as ACTUAL conversation context (from past sessions)
             if memory_context.get("recent_messages"):
-                memory_context_str = "Context from our previous conversations:\n"
-                for msg in memory_context["recent_messages"][-3:]:
+                logger.info(f"🧠 Injecting {len(memory_context['recent_messages'])} memories into prompt")
+                for msg in memory_context["recent_messages"][-5:]:  # Last 5 memories
                     content = msg.get("content", {})
                     if "messages" in content:
+                        # Extract actual user/assistant message pairs
                         for m in content["messages"]:
                             role = m.get("role", "user")
-                            text = m.get("content", "")[:150]
-                            memory_context_str += f"{role.capitalize()}: {text}\n"
-
-                if len(memory_context_str) > 50:
-                    conversation.append({
-                        "role": "system",
-                        "content": memory_context_str.strip(),
-                    })
+                            text = m.get("content", "")
+                            if text:  # Only add non-empty messages
+                                conversation.append({
+                                    "role": role,
+                                    "content": text
+                                })
+                logger.info(f"✅ Memory injection complete: {len(conversation)} messages from memory")
 
             # Add in-memory conversation history from THIS SESSION
             for conv in self.conversation_history[-5:]:
@@ -511,14 +522,14 @@ Curious Support (Gentle Probing):
 
             # Add current user message
             conversation.append({"role": "user", "content": user_message})
+            # ============================================================
+            # END PATCH
+            # ============================================================
 
             logger.info(
-                "Prompt built with %s messages, including %s from current session, "
-                "memory_context=%s, is_veteran=%s",
-                len(conversation),
-                len(self.conversation_history),
-                memory_context.get("has_context", False),
-                self.is_veteran,
+                f"Prompt built with {len(conversation)} messages, including {len(self.conversation_history)} "
+                f"from current session, memory_context={memory_context.get('has_context', False)}, "
+                f"is_veteran={self.is_veteran}"
             )
 
             return {
@@ -708,6 +719,7 @@ Curious Support (Gentle Probing):
                     "response_time": datetime.utcnow().isoformat(),
                     "has_followup": emotional_context.get("requires_followup", False),
                     "is_veteran": self.is_veteran,
+                    "memory_context_used": memory_context.get("has_context", False),
                 },
             }
 
