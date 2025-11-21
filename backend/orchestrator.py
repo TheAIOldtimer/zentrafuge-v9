@@ -373,8 +373,8 @@ class CaelOrchestrator:
         ENHANCED: Loads more memories for deeper context
         """
         try:
-            # EXPANDED: Load last 20 conversations (up from 5)
-            recent_messages = self.memory.get_conversation_context(max_messages=20)
+            # EXPANDED: Load last 50 conversations (up from 5)
+            recent_messages = self.memory.get_conversation_context(max_messages=50)
             emotional_profile = self.memory.get_emotional_profile()
 
             # EXPANDED: Load more important memories with lower threshold
@@ -401,8 +401,8 @@ class CaelOrchestrator:
             )
 
             return {
-                # EXPANDED: Use last 10 conversations (up from 3)
-                "recent_messages": recent_messages[-10:] if recent_messages else [],
+                # EXPANDED: Use last 30 conversations (up from 3)
+                "recent_messages": recent_messages[-30:] if recent_messages else [],
                 "emotional_profile": emotional_profile,
                 "relevant_memories": relevant_memories,
                 "user_preferences": user_preferences,
@@ -535,7 +535,7 @@ Curious Support (Gentle Probing):
             # ENHANCED: Inject up to 10 past conversations (up from 5)
             if memory_context.get("recent_messages"):
                 logger.info(f"🧠 Injecting {len(memory_context['recent_messages'])} memories into prompt")
-                for msg in memory_context["recent_messages"][-10:]:  # Last 10 memories
+                for msg in memory_context["recent_messages"][-30:]:  # Last 30 memories
                     content = msg.get("content", {})
                     if "messages" in content:
                         # Extract actual user/assistant message pairs
