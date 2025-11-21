@@ -373,8 +373,8 @@ class CaelOrchestrator:
         ENHANCED: Loads more memories for deeper context
         """
         try:
-            # EXPANDED: Load last 50 conversations (up from 5)
-            recent_messages = self.memory.get_conversation_context(max_messages=50)
+            # EXPANDED: Load last 100 conversations (up from 5)
+            recent_messages = self.memory.get_conversation_context(max_messages=100)
             emotional_profile = self.memory.get_emotional_profile()
 
             # EXPANDED: Load more important memories with lower threshold
