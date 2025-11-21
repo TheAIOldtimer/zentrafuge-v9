@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
 Zentrafuge v9 - Cael Core Orchestrator
-Intelligent prompt assembly, memory integration, and emotional processing
+FINAL VERSION with expanded memory window and natural continuity
 
-PATCHED: Fixed memory injection to actually use retrieved memories in conversation context
+Changes from previous version:
+- Increased memory window from 5 to 20 conversations
+- Uses 10 recent conversations (up from 3)
+- Contextual greetings based on relationship history
+- Proactive memory references in responses
+- Enhanced token limits for deeper context
 """
 
 import json
@@ -22,7 +27,7 @@ class CaelOrchestrator:
     Core orchestration engine for Cael AI companion
 
     Responsibilities:
-    - Assemble context-aware prompts
+    - Assemble context-aware prompts with deep memory integration
     - Integrate memory and emotional state
     - Route intents and manage conversation flow
     - Process and store AI responses
@@ -47,14 +52,14 @@ class CaelOrchestrator:
         self.user_profile = self._load_user_profile()
         self.is_veteran = bool(self.user_profile.get("is_veteran", False))
 
-        # Model configuration with fallbacks (ECONOMIC VERSION)
+        # Model configuration with increased token limits for deeper context
         self.model_config = {
             "primary": "gpt-4o-mini",       # 💚 Cheaper default
             "premium": "gpt-4-turbo",       # 💰 For complex/emotional needs
             "fallback": "gpt-3.5-turbo",    # 💚 Backup
             "emergency": "gpt-3.5-turbo",
-            "max_tokens": 500,              # Reduced from 800
-            "max_tokens_premium": 800,      # For complex queries
+            "max_tokens": 600,              # Increased from 500 for deeper responses
+            "max_tokens_premium": 1000,     # Increased from 800
             "temperature": 0.7,
             "cost_threshold_usd": 10.0,
             "use_smart_routing": True       # 🎯 Enable intelligent routing
@@ -100,6 +105,7 @@ class CaelOrchestrator:
             - Build relationships through consistent, evolving understanding
             - Never claim you "don't have access" to information you were told before
             - Be honest when you don't remember something - don't make things up or guess
+            - Proactively follow up on topics from previous conversations when appropriate
 
             Boundaries:
             - You cannot and will not perform harmful actions
@@ -196,13 +202,13 @@ class CaelOrchestrator:
             # Analyze emotional context
             emotional_analysis = self._analyze_emotional_context(clean_message)
 
-            # Retrieve relevant memories
+            # Retrieve relevant memories (EXPANDED WINDOW)
             memory_context = self._build_memory_context(clean_message, emotional_analysis)
 
             # Detect user intent
             intent_analysis = self._analyze_intent(clean_message, emotional_analysis)
 
-            # Build comprehensive prompt
+            # Build comprehensive prompt with deep memory integration
             prompt_data = self._build_prompt(
                 user_message=clean_message,
                 memory_context=memory_context,
@@ -364,14 +370,17 @@ class CaelOrchestrator:
     ) -> Dict[str, Any]:
         """
         Build relevant memory context for response generation
+        ENHANCED: Loads more memories for deeper context
         """
         try:
-            recent_messages = self.memory.get_conversation_context(max_messages=5)
+            # EXPANDED: Load last 20 conversations (up from 5)
+            recent_messages = self.memory.get_conversation_context(max_messages=20)
             emotional_profile = self.memory.get_emotional_profile()
 
+            # EXPANDED: Load more important memories with lower threshold
             relevant_memories = self.memory.search_memories(
-                importance_threshold=6,
-                limit=3,
+                importance_threshold=5,  # Lowered from 6
+                limit=10,  # Increased from 3
             )
 
             user_preferences: Dict[str, Any] = {}
@@ -392,7 +401,8 @@ class CaelOrchestrator:
             )
 
             return {
-                "recent_messages": recent_messages[-3:] if recent_messages else [],
+                # EXPANDED: Use last 10 conversations (up from 3)
+                "recent_messages": recent_messages[-10:] if recent_messages else [],
                 "emotional_profile": emotional_profile,
                 "relevant_memories": relevant_memories,
                 "user_preferences": user_preferences,
@@ -422,11 +432,40 @@ class CaelOrchestrator:
         """
         Build comprehensive prompt for AI response generation
         
-        PATCHED: Now properly injects memories as actual conversation history
+        ENHANCED: Includes contextual greeting logic and proactive memory use
         """
         try:
             # Start with core being code
             system_prompt = self.being_code
+
+            # === NEW: Contextual greeting based on relationship history ===
+            if memory_context.get("has_context", False):
+                system_prompt += """
+
+IMPORTANT - Ongoing Relationship Context:
+- You have access to past conversations with this user in the message history below.
+- This is NOT your first interaction with them - you have an established relationship.
+- DO NOT use first-time greetings like "Hello! I'm Cael, your AI companion. What would you like to talk about?"
+- Instead, greet them naturally as you would continue an ongoing friendship:
+  * "Welcome back!" or "Good to see you again!" or "Hi there!"
+  * Reference recent topics: "How did that thing with [topic] turn out?"
+  * Show continuity: "You mentioned [past detail] - how's that going?"
+- Be proactive in following up on previous conversations when it feels natural.
+- If they seem different emotionally than last time, you can gently acknowledge it:
+  * "You seem more upbeat today - has something good happened?"
+  * "You sound a bit stressed - is everything okay?"
+- Maintain the warmth and familiarity of an ongoing relationship.
+"""
+            else:
+                system_prompt += """
+
+IMPORTANT - First Interaction:
+- This appears to be your first conversation with this user.
+- You may use a welcoming introduction that explains who you are.
+- Be warm, genuine, and set the tone for a supportive relationship.
+- Example: "Hello! I'm Cael, your AI companion. I'm here to listen, support, and grow alongside you. What would you like to talk about today?"
+"""
+            # === END NEW SECTION ===
 
             # Veteran vs civilian handling
             if self.is_veteran:
@@ -488,14 +527,15 @@ Curious Support (Gentle Probing):
                 system_prompt += f"\n\n{style_guidance[response_style]}"
 
             # ============================================================
-            # PATCHED: Proper memory injection
+            # MEMORY INJECTION: Proper conversation history
             # ============================================================
             conversation: List[Dict[str, str]] = []
 
             # Add relevant memories as ACTUAL conversation context (from past sessions)
+            # ENHANCED: Inject up to 10 past conversations (up from 5)
             if memory_context.get("recent_messages"):
                 logger.info(f"🧠 Injecting {len(memory_context['recent_messages'])} memories into prompt")
-                for msg in memory_context["recent_messages"][-5:]:  # Last 5 memories
+                for msg in memory_context["recent_messages"][-10:]:  # Last 10 memories
                     content = msg.get("content", {})
                     if "messages" in content:
                         # Extract actual user/assistant message pairs
@@ -523,7 +563,7 @@ Curious Support (Gentle Probing):
             # Add current user message
             conversation.append({"role": "user", "content": user_message})
             # ============================================================
-            # END PATCH
+            # END MEMORY INJECTION
             # ============================================================
 
             logger.info(
@@ -1044,7 +1084,6 @@ class EmotionalSafetyMonitor:
         """
         try:
             risk_level = safety_assessment.get("risk_level", "unknown")
-            concerns = safety_assessment.get("safety_concerns", [])
 
             if risk_level == "high" or safety_assessment.get(
                 "requires_professional_help", False
@@ -1111,17 +1150,12 @@ def create_safety_monitor(user_id: str) -> EmotionalSafetyMonitor:
 
 
 if __name__ == "__main__":
-    # Simple smoke test scaffold
-    test_messages = [
-        "I'm feeling really happy today!",
-        "I'm so frustrated with everything...",
-        "Can you help me understand this?",
-        "Thank you for being there for me",
-        "I don't know what to do anymore",
-    ]
-
-    print("Zentrafuge v9 Orchestrator - Test Suite")
-    print("Note: Full testing requires database and OpenAI connections")
-    for msg in test_messages:
-        print(f"\nMessage: {msg}")
-        print("  (Analysis would appear here with full setup)")
+    print("Zentrafuge v9 Orchestrator - FINAL VERSION")
+    print("Enhanced memory window with natural relationship continuity")
+    print()
+    print("Key improvements:")
+    print("- Loads 20 conversations (up from 5)")
+    print("- Uses 10 in prompt (up from 3)")
+    print("- Contextual greetings based on relationship")
+    print("- Proactive memory references")
+    print("- Increased token limits for deeper responses")
