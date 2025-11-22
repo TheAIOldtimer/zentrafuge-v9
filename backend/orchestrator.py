@@ -9,6 +9,10 @@ Changes from previous version:
 - Contextual greetings based on relationship history
 - Proactive memory references in responses
 - Enhanced token limits for deeper context
+
+FIXED Nov 22, 2025:
+- Veteran detection now reads from veteran_profile.is_veteran (nested)
+- Added debug logging for memory investigation
 """
 
 import json
@@ -50,7 +54,17 @@ class CaelOrchestrator:
 
         # Load user profile and veteran flag
         self.user_profile = self._load_user_profile()
-        self.is_veteran = bool(self.user_profile.get("is_veteran", False))
+        
+        # ============================================================
+        # FIX: Veteran detection - read from nested veteran_profile map
+        # ============================================================
+        veteran_profile = self.user_profile.get("veteran_profile", {})
+        if isinstance(veteran_profile, dict):
+            self.is_veteran = bool(veteran_profile.get("is_veteran", False))
+        else:
+            self.is_veteran = False
+        logger.info(f"👤 User {user_id}: is_veteran={self.is_veteran}")
+        # ============================================================
 
         # Model configuration with increased token limits for deeper context
         self.model_config = {
@@ -375,6 +389,30 @@ class CaelOrchestrator:
         try:
             # EXPANDED: Load last 100 conversations (up from 5)
             recent_messages = self.memory.get_conversation_context(max_messages=100)
+            
+            # ============================================================
+            # TEMPORARY DEBUG - Remove after investigation
+            # ============================================================
+            if recent_messages:
+                logger.info(f"🔍 DEBUG - Showing first 5 memory contents:")
+                for i, msg in enumerate(recent_messages[:5]):
+                    content = msg.get('content', {})
+                    messages_in_memory = content.get('messages', [])
+                    logger.info(f"  Memory {i} ({msg.get('memory_id', 'unknown')}):")
+                    logger.info(f"    - Created: {msg.get('created_at', 'unknown')}")
+                    logger.info(f"    - Importance: {msg.get('importance', 'unknown')}")
+                    logger.info(f"    - Message count: {len(messages_in_memory)}")
+                    if messages_in_memory:
+                        for j, m in enumerate(messages_in_memory[:2]):  # First 2 messages
+                            role = m.get('role', '?')
+                            text = m.get('content', '')[:100]  # First 100 chars
+                            logger.info(f"    - [{role}]: {text}...")
+            else:
+                logger.info(f"🔍 DEBUG - No recent messages loaded!")
+            # ============================================================
+            # END TEMPORARY DEBUG
+            # ============================================================
+            
             emotional_profile = self.memory.get_emotional_profile()
 
             # EXPANDED: Load more important memories with lower threshold
@@ -1150,12 +1188,10 @@ def create_safety_monitor(user_id: str) -> EmotionalSafetyMonitor:
 
 
 if __name__ == "__main__":
-    print("Zentrafuge v9 Orchestrator - FINAL VERSION")
-    print("Enhanced memory window with natural relationship continuity")
+    print("Zentrafuge v9 Orchestrator - FIXED VERSION")
+    print("Nov 22, 2025 - Fixed veteran detection + debug logging")
     print()
-    print("Key improvements:")
-    print("- Loads 20 conversations (up from 5)")
-    print("- Uses 10 in prompt (up from 3)")
-    print("- Contextual greetings based on relationship")
-    print("- Proactive memory references")
-    print("- Increased token limits for deeper responses")
+    print("Fixes applied:")
+    print("- Veteran detection reads from veteran_profile.is_veteran (nested)")
+    print("- Added debug logging to see memory contents")
+    print("- Enhanced memory window with natural relationship continuity")
