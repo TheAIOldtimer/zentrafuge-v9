@@ -1,4 +1,4 @@
-// frontend/js/onboarding.js - Complete onboarding flow (DEBUG VERSION)
+// frontend/js/onboarding.js - FIXED VERSION
 
 import Config from './config.js';
 import { showMessage, showLoading } from './utils.js';
@@ -132,8 +132,10 @@ function setupCompletionButton() {
     
     if (completeBtn) {
         console.log('✅ Attaching click handler to complete button');
-        completeBtn.addEventListener('click', () => {
+        completeBtn.addEventListener('click', (e) => {
             console.log('🔵 COMPLETE BUTTON CLICKED!');
+            e.preventDefault();  // Prevent any default behavior
+            completeBtn.disabled = true;  // Disable to prevent double-clicks
             completeOnboarding();
         });
     } else {
@@ -200,29 +202,17 @@ async function completeOnboarding() {
         showLoading('onboarding-loading', true);
         showMessage('onboarding-message', '');
         
-        console.log('2️⃣ Waiting for Firebase auth state...');
-        // CRITICAL: Wait for Firebase to be ready
-        await new Promise((resolve) => {
-            const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
-                unsubscribe();
-                console.log('   Firebase auth state ready, user:', user?.uid);
-                resolve();
-            });
-        });
-        
-        console.log('3️⃣ Getting current user...');
+        console.log('2️⃣ Getting current user...');
         const user = firebase.auth().currentUser;
         
         if (!user) {
-            console.error('❌ CRITICAL: No user found after auth state check!');
+            console.error('❌ CRITICAL: No user found!');
             throw new Error('User not authenticated');
         }
         
         console.log('✅ User authenticated:', user.uid);
-        console.log('   Email:', user.email);
-        console.log('   Email verified:', user.emailVerified);
         
-        console.log('4️⃣ Collecting onboarding data...');
+        console.log('3️⃣ Collecting onboarding data...');
         
         // Collect all onboarding data
         const onboardingData = {
@@ -251,11 +241,11 @@ async function completeOnboarding() {
         
         console.log('📤 Onboarding data collected:', JSON.stringify(onboardingData, null, 2));
         
-        console.log('5️⃣ Getting Firebase ID token...');
+        console.log('4️⃣ Getting Firebase ID token...');
         const token = await user.getIdToken();
-        console.log('🔑 Token obtained (length:', token.length, ')');
+        console.log('🔑 Token obtained');
         
-        console.log('6️⃣ Sending to backend...');
+        console.log('5️⃣ Sending to backend...');
         console.log('   API endpoint:', `${Config.API_BASE}/user/onboarding`);
         
         const response = await fetch(`${Config.API_BASE}/user/onboarding`, {
@@ -269,7 +259,6 @@ async function completeOnboarding() {
         
         console.log('📡 Response received!');
         console.log('   Status:', response.status);
-        console.log('   Status text:', response.statusText);
         console.log('   OK:', response.ok);
         
         if (!response.ok) {
@@ -281,7 +270,7 @@ async function completeOnboarding() {
         const result = await response.json();
         console.log('✅ Backend response:', result);
         
-        console.log('7️⃣ Showing completion step...');
+        console.log('6️⃣ Moving to completion step (step 6)...');
         currentStep = 6;
         showStep(6);
         updateProgress();
@@ -291,13 +280,17 @@ async function completeOnboarding() {
         
     } catch (error) {
         console.error('❌❌❌ ONBOARDING ERROR:', error);
-        console.error('   Error name:', error.name);
         console.error('   Error message:', error.message);
-        console.error('   Error stack:', error.stack);
         
         showMessage('onboarding-message', `Failed to complete setup: ${error.message}`, true);
+        
+        // Re-enable button on error
+        const completeBtn = document.getElementById('complete-onboarding');
+        if (completeBtn) {
+            completeBtn.disabled = false;
+        }
     } finally {
-        console.log('8️⃣ Hiding loading indicator...');
+        console.log('7️⃣ Hiding loading indicator...');
         showLoading('onboarding-loading', false);
     }
     
