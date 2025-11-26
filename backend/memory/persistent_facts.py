@@ -215,7 +215,7 @@ class PersistentFacts:
     def extract_facts_from_message(self, user_message: str, ai_response: str) -> int:
         """
         Auto-extract facts from conversation messages
-        Uses simple pattern matching (can be enhanced with LLM in future)
+        ENHANCED: Comprehensive pattern matching for names, pets, locations, relationships, etc.
         
         Args:
             user_message: What the user said
@@ -228,17 +228,19 @@ class PersistentFacts:
         message_lower = user_message.lower()
         
         try:
-            # Extract name
+            # ============================================================
+            # EXTRACT NAME (with nickname support)
+            # ============================================================
             name_patterns = [
                 "my name is ",
                 "i'm called ",
                 "call me ",
                 "i am ",
-                "name's "
+                "name's ",
+                "i'm "  # Added for "I'm Anthony"
             ]
             for pattern in name_patterns:
                 if pattern in message_lower:
-                    # Simple extraction (first word after pattern)
                     start_idx = message_lower.index(pattern) + len(pattern)
                     rest = user_message[start_idx:].strip()
                     name = rest.split()[0].strip('.,!?').capitalize()
@@ -249,27 +251,54 @@ class PersistentFacts:
                         logger.info(f"📝 Auto-extracted name: {name}")
                         break
             
-            # Extract pets
+            # Extract nickname
+            nickname_patterns = [
+                "my nickname is ",
+                "but call me ",
+                "nickname is ",
+                "people call me ",
+                "but my nickname is "
+            ]
+            for pattern in nickname_patterns:
+                if pattern in message_lower:
+                    start_idx = message_lower.index(pattern) + len(pattern)
+                    rest = user_message[start_idx:].strip()
+                    nickname = rest.split()[0].strip('.,!?').capitalize()
+                    
+                    if nickname and len(nickname) > 1 and nickname.isalpha():
+                        self.set_fact('identity', 'nickname', nickname, 'conversation')
+                        extracted_count += 1
+                        logger.info(f"📝 Auto-extracted nickname: {nickname}")
+                        break
+            
+            # ============================================================
+            # EXTRACT PETS (comprehensive patterns)
+            # ============================================================
             pet_patterns = [
-                ("dog", ["my dog", "i have a dog", "got a dog"]),
-                ("cat", ["my cat", "i have a cat", "got a cat"]),
+                ("dog", [
+                    "my dog", "i have a dog", "got a dog", "and a dog",
+                    "a dog called", "a dog named", "dog called", "dog named"
+                ]),
+                ("cat", [
+                    "my cat", "i have a cat", "got a cat", "and a cat",
+                    "a cat called", "a cat named", "cat called", "cat named"
+                ]),
                 ("pet", ["my pet", "i have a pet", "got a pet"])
             ]
             
             for pet_type, patterns in pet_patterns:
                 for pattern in patterns:
                     if pattern in message_lower:
-                        # Try to extract pet name
                         pet_name = None
                         
-                        # Look for "named X" or "called X"
+                        # Look for "named X" or "called X" (handles commas)
                         if "named " in message_lower or "called " in message_lower:
                             keyword = "named " if "named " in message_lower else "called "
                             start_idx = message_lower.index(keyword) + len(keyword)
                             rest = user_message[start_idx:].strip()
-                            pet_name = rest.split()[0].strip('.,!?').capitalize()
+                            pet_name = rest.split(',')[0].split()[0].strip('.,!?').capitalize()
                         
-                        # Store pet
+                        # Store pet with name
                         if pet_name and len(pet_name) > 1 and pet_name.isalpha():
                             key = f"pet_{pet_type}_{pet_name.lower()}"
                             self.set_fact('relationships', key, {
@@ -286,8 +315,13 @@ class PersistentFacts:
                             logger.info(f"🐾 Auto-extracted pet ownership: {pet_type}")
                         break
             
-            # Extract favorite color
-            color_keywords = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "black", "white"]
+            # ============================================================
+            # EXTRACT FAVORITE COLOR (UK + US spelling)
+            # ============================================================
+            color_keywords = [
+                "red", "blue", "green", "yellow", "purple", "orange", 
+                "pink", "black", "white", "brown", "gray", "grey", "silver", "gold"
+            ]
             if "favorite color" in message_lower or "favourite color" in message_lower:
                 for color in color_keywords:
                     if color in message_lower:
@@ -295,6 +329,140 @@ class PersistentFacts:
                         extracted_count += 1
                         logger.info(f"🎨 Auto-extracted favorite color: {color}")
                         break
+            
+            # ============================================================
+            # EXTRACT LOCATION (city/country)
+            # ============================================================
+            location_patterns = [
+                "i live in ",
+                "i'm from ",
+                "i'm in ",
+                "living in ",
+                "based in ",
+                "i'm based in "
+            ]
+            for pattern in location_patterns:
+                if pattern in message_lower:
+                    start_idx = message_lower.index(pattern) + len(pattern)
+                    rest = user_message[start_idx:].strip()
+                    # Extract up to comma or period (city names can be multi-word)
+                    location = rest.split(',')[0].split('.')[0].strip()
+                    
+                    if location and len(location) > 2:
+                        self.set_fact('identity', 'location', location.title(), 'conversation')
+                        extracted_count += 1
+                        logger.info(f"📍 Auto-extracted location: {location}")
+                        break
+            
+            # ============================================================
+            # EXTRACT RELATIONSHIPS (spouse, partner, family)
+            # ============================================================
+            # Spouse/Partner
+            spouse_patterns = [
+                ("wife", ["my wife", "my wife is", "my wife's name is"]),
+                ("husband", ["my husband", "my husband is", "my husband's name is"]),
+                ("partner", ["my partner", "my partner is", "my partner's name is"]),
+                ("spouse", ["my spouse", "my spouse is", "my spouse's name is"])
+            ]
+            
+            for relationship_type, patterns in spouse_patterns:
+                for pattern in patterns:
+                    if pattern in message_lower:
+                        # Look for name after "called" or "is"
+                        name = None
+                        if "called " in message_lower:
+                            start_idx = message_lower.index("called ") + 7
+                            rest = user_message[start_idx:].strip()
+                            name = rest.split(',')[0].split()[0].strip('.,!?').capitalize()
+                        elif "is " in message_lower:
+                            start_idx = message_lower.index("is ") + 3
+                            rest = user_message[start_idx:].strip()
+                            name = rest.split(',')[0].split()[0].strip('.,!?').capitalize()
+                        
+                        if name and len(name) > 1 and name.isalpha():
+                            self.set_fact('relationships', relationship_type, name, 'conversation')
+                            extracted_count += 1
+                            logger.info(f"💑 Auto-extracted {relationship_type}: {name}")
+                            break
+            
+            # Marriage duration
+            if "married" in message_lower and ("year" in message_lower or "month" in message_lower):
+                import re
+                # Look for patterns like "married 3 years" or "married for three years"
+                match = re.search(r'married.*?(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s*(year|month)', message_lower)
+                if match:
+                    duration = match.group(1)
+                    unit = match.group(2)
+                    self.set_fact('relationships', 'married_duration', f"{duration} {unit}s", 'conversation')
+                    extracted_count += 1
+                    logger.info(f"💍 Auto-extracted marriage duration: {duration} {unit}s")
+            
+            # ============================================================
+            # EXTRACT OCCUPATION & WORK STATUS
+            # ============================================================
+            occupation_patterns = [
+                "i'm a ", "i am a ", "i work as ", "i work as a ",
+                "my job is ", "i'm an ", "i am an ", "working as "
+            ]
+            for pattern in occupation_patterns:
+                if pattern in message_lower:
+                    start_idx = message_lower.index(pattern) + len(pattern)
+                    rest = user_message[start_idx:].strip()
+                    # Extract until comma, period, or exclamation
+                    occupation = rest.split(',')[0].split('.')[0].split('!')[0].strip()
+                    
+                    if occupation and len(occupation) > 2:
+                        self.set_fact('status', 'occupation', occupation, 'conversation')
+                        extracted_count += 1
+                        logger.info(f"💼 Auto-extracted occupation: {occupation}")
+                        break
+            
+            # Retirement status
+            if "retired" in message_lower or "i'm retired" in message_lower:
+                self.set_fact('status', 'retired', True, 'conversation')
+                extracted_count += 1
+                logger.info(f"🏖️ Auto-extracted retirement status: retired")
+            
+            # ============================================================
+            # EXTRACT BIRTH INFO (month, star sign, age)
+            # ============================================================
+            # Star sign
+            star_signs = [
+                "aries", "taurus", "gemini", "cancer", "leo", "virgo",
+                "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces"
+            ]
+            if "star sign" in message_lower or "zodiac" in message_lower:
+                for sign in star_signs:
+                    if sign in message_lower:
+                        self.set_fact('identity', 'star_sign', sign.capitalize(), 'conversation')
+                        extracted_count += 1
+                        logger.info(f"♈ Auto-extracted star sign: {sign}")
+                        break
+            
+            # Birth month
+            months = [
+                "january", "february", "march", "april", "may", "june",
+                "july", "august", "september", "october", "november", "december"
+            ]
+            if "born in " in message_lower or "birthday" in message_lower:
+                for month in months:
+                    if month in message_lower:
+                        self.set_fact('identity', 'birth_month', month.capitalize(), 'conversation')
+                        extracted_count += 1
+                        logger.info(f"🎂 Auto-extracted birth month: {month}")
+                        break
+            
+            # Age
+            if "i'm " in message_lower or "i am " in message_lower:
+                import re
+                # Look for "I'm 25" or "I am 30 years old"
+                match = re.search(r"i'?m?\s+(\d{1,3})(\s+years?\s+old)?", message_lower)
+                if match:
+                    age = match.group(1)
+                    if 1 <= int(age) <= 120:  # Sanity check
+                        self.set_fact('identity', 'age', int(age), 'conversation')
+                        extracted_count += 1
+                        logger.info(f"🎂 Auto-extracted age: {age}")
             
             return extracted_count
             
