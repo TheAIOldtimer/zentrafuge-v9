@@ -2,7 +2,7 @@
 """
 Zentrafuge v9 - Main Flask Backend
 Modular, secure, memory-first AI companion architecture
-WITH MEMORY & PERSONALITY INTEGRATION
+WITH ENHANCED MULTI-TIER MEMORY SYSTEM v2.0
 """
 
 import os
@@ -20,9 +20,9 @@ from firebase_admin import auth, credentials, firestore
 
 from openai import OpenAI  # OpenAI SDK v1.3.0 style
 
-# Import memory and orchestration modules - CORRECTED NAMES
+# Import memory and orchestration modules
 from orchestrator import CaelOrchestrator, EmotionalSafetyMonitor
-from memory_storage import MemoryStorage
+# NOTE: MemoryStorage import REMOVED - memory is now internal to orchestrator
 
 # -----------------------------------------------------------------------------
 # Flask + Logging
@@ -135,13 +135,15 @@ def init_openai():
 
 
 # -----------------------------------------------------------------------------
-# Orchestrator Management
+# Orchestrator Management (UPDATED FOR v2.0)
 # -----------------------------------------------------------------------------
 
 def get_user_orchestrator(user_id: str) -> CaelOrchestrator:
     """
-    Get or create orchestrator for user with memory persistence
+    Get or create orchestrator for user with internal memory management
     Uses in-memory cache for session persistence
+    
+    UPDATED v2.0: Memory is now created internally by orchestrator
     
     Args:
         user_id: User identifier
@@ -156,19 +158,16 @@ def get_user_orchestrator(user_id: str) -> CaelOrchestrator:
         if not db_local or not openai:
             raise RuntimeError("Services not initialized")
         
-        # Create memory storage for user
-        memory = MemoryStorage(db_local, user_id)
-        
-        # Create orchestrator with memory
+        # Create orchestrator (memory created internally now)
         orchestrator = CaelOrchestrator(
             user_id=user_id,
             db=db_local,
-            openai_client=openai,
-            memory_storage=memory
+            openai_client=openai
+            # memory_storage argument REMOVED - created internally
         )
         
         user_orchestrators[user_id] = orchestrator
-        logger.info(f"🧠 Created orchestrator with memory for user {user_id}")
+        logger.info(f"🧠 Created orchestrator with internal memory for user {user_id}")
     
     return user_orchestrators[user_id]
 
@@ -262,10 +261,13 @@ def root():
     return jsonify({
         "service": "Zentrafuge v9 API",
         "status": "running",
-        "version": "9.0.0-memory",
+        "version": "9.0.0-memory-v2",
         "timestamp": datetime.utcnow().isoformat(),
         "features": [
-            "Memory Integration ✅",
+            "Multi-Tier Memory System v2.0 ✅",
+            "Persistent Facts (Never Forgotten) ✅",
+            "Micro Memories (14-day decay) ✅",
+            "Super Memories (Consolidation) ✅",
             "Emotional Intelligence ✅",
             "Personality Adaptation ✅",
             "Safety Monitoring ✅"
@@ -279,7 +281,8 @@ def root():
             "user_onboarding": "/user/onboarding",
             "memory_stats": "/memory/stats",
             "emotional_profile": "/memory/emotional-profile",
-            "conversation_summary": "/conversation/summary"
+            "conversation_summary": "/conversation/summary",
+            "session_clear": "/session/clear"
         },
     })
 
@@ -295,7 +298,7 @@ def health():
         "status": status,
         "firebase": firebase_ok,
         "openai": openai_ok,
-        "memory_system": "enabled",
+        "memory_system": "v2.0-multi-tier",
         "active_sessions": len(user_orchestrators),
         "timestamp": datetime.utcnow().isoformat(),
     })
@@ -359,7 +362,7 @@ def user_profile():
         "email": user_info.get("email"),
         "full_name": data.get("name", ""),
         "is_veteran": data.get("is_veteran", False),
-        "country": data.get("country", "UK"),  # future-proof for intl rollout
+        "country": data.get("country", "UK"),
         "marketing_opt_in": data.get("marketing_opt_in", False),
         "registration_date": data.get(
             "registration_date",
@@ -383,6 +386,7 @@ def user_profile():
 def user_onboarding():
     """
     Complete user onboarding process and save preferences
+    ENHANCED v2.0: Now imports onboarding data into persistent facts
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -407,7 +411,7 @@ def user_onboarding():
         "cael_initialized": True,
         "completed_at": datetime.utcnow().isoformat(),
         
-        # Email verification tracking (captured from Firebase token)
+        # Email verification tracking
         "email_verified": user_info.get("email_verified", True),
         "email_verified_at": datetime.utcnow().isoformat(),
         
@@ -423,7 +427,7 @@ def user_onboarding():
         "sources_of_meaning": data.get("sources_of_meaning", []),
         "effective_support": data.get("effective_support", []),
         
-        # Veteran profile (if applicable)
+        # Veteran profile
         "veteran_profile": data.get("veteran_profile", {
             "is_veteran": False,
             "service_branch": None,
@@ -435,7 +439,7 @@ def user_onboarding():
         }),
         
         # System metadata
-        "onboarding_version": "v9_enhanced_memory",
+        "onboarding_version": "v9_enhanced_memory_v2",
         "personality_profile": data.get("personality_profile", {}),
     }
     
@@ -444,16 +448,27 @@ def user_onboarding():
         logger.info(f"💾 Attempting to save onboarding data to Firestore...")
         db_local.collection("users").document(user_id).set(
             onboarding_data, 
-            merge=True  # Merge with existing profile data
+            merge=True
         )
         
         logger.info(f"✅ Onboarding completed and saved for user {user_id}")
+        
+        # NEW v2.0: Import onboarding data into persistent facts
+        facts_imported = 0
+        try:
+            orchestrator = get_user_orchestrator(user_id)
+            facts_imported = orchestrator.import_onboarding(onboarding_data)
+            logger.info(f"✨ Imported {facts_imported} persistent facts from onboarding")
+        except Exception as import_error:
+            logger.error(f"⚠️ Failed to import onboarding facts: {import_error}")
+            # Don't fail the whole onboarding if fact import fails
         
         return jsonify({
             "success": True,
             "message": "Onboarding completed successfully",
             "veteran_verified": onboarding_data["veteran_profile"].get("is_veteran", False),
-            "companion_name": onboarding_data["companion_name"]
+            "companion_name": onboarding_data["companion_name"],
+            "facts_imported": facts_imported
         })
         
     except Exception as e:
@@ -469,7 +484,7 @@ def user_onboarding():
 @app.route("/index", methods=["POST"])
 def index_chat():
     """
-    Main chat endpoint with memory and personality integration
+    Main chat endpoint with multi-tier memory and personality integration
     
     Request:
         { "message": "User says..." }
@@ -485,8 +500,6 @@ def index_chat():
                 "memory_context_used": boolean
             }
         }
-    
-    (Auth required via Firebase ID token in Authorization: Bearer <token>)
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -501,12 +514,11 @@ def index_chat():
         return jsonify({"error": "Message required"}), 400
 
     try:
-        # Get user's orchestrator (with memory and personality)
-        logger.info(f"🧠 Processing message for user {user_id} with orchestrator")
+        # Get user's orchestrator (with multi-tier memory)
+        logger.info(f"🧠 Processing message for user {user_id} with orchestrator v2.0")
         orchestrator = get_user_orchestrator(user_id)
         
         # Process message through orchestrator
-        # Note: orchestrator.process_message is async
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
@@ -526,7 +538,6 @@ def index_chat():
             f"model={metadata.get('model_used', 'unknown')}"
         )
         
-        # Return response in expected format
         return jsonify({
             "response": result['response'],
             "metadata": metadata
@@ -558,9 +569,13 @@ def index_chat():
 @app.route("/memory/stats", methods=["GET"])
 def memory_stats():
     """
-    Get user's memory statistics
+    Get user's memory statistics (v2.0 multi-tier)
     
-    Returns memory usage, types, and storage info
+    Returns:
+        - Persistent facts count
+        - Micro memories count
+        - Super memories count
+        - Current session info
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -578,6 +593,7 @@ def memory_stats():
             "success": True,
             "user_id": user_id,
             "stats": stats,
+            "memory_version": "2.0",
             "timestamp": datetime.utcnow().isoformat()
         })
         
@@ -601,14 +617,16 @@ def emotional_profile():
     
     try:
         orchestrator = get_user_orchestrator(user_id)
-        profile = orchestrator.memory.get_emotional_profile()
+        
+        # Get facts from persistent storage
+        all_facts = orchestrator.memory.get_all_facts()
         
         logger.info(f"💙 Emotional profile retrieved for user {user_id}")
         
         return jsonify({
             "success": True,
             "user_id": user_id,
-            "profile": profile,
+            "facts": all_facts,
             "timestamp": datetime.utcnow().isoformat()
         })
         
@@ -652,7 +670,7 @@ def conversation_summary():
 def clear_session():
     """
     Clear user's session (logout/end conversation)
-    Clears orchestrator from memory but preserves database memories
+    ENHANCED v2.0: Creates micro memory before clearing
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -661,13 +679,37 @@ def clear_session():
     user_id = user_info["uid"]
     
     try:
+        # NEW v2.0: End session and create micro memory BEFORE clearing
+        micro_memory_id = None
+        if user_id in user_orchestrators:
+            logger.info(f"🔚 Ending session for user {user_id} before clearing...")
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                micro_memory_id = loop.run_until_complete(
+                    user_orchestrators[user_id].end_session(reason="logout")
+                )
+                
+                if micro_memory_id:
+                    logger.info(f"✅ Created micro memory: {micro_memory_id}")
+                else:
+                    logger.info(f"⏭️ Session too short for micro memory creation")
+                    
+            finally:
+                loop.close()
+        
+        # Clear orchestrator from cache
         clear_user_orchestrator(user_id)
         
         logger.info(f"🗑️ Session cleared for user {user_id}")
         
         return jsonify({
             "success": True,
-            "message": "Session cleared successfully"
+            "message": "Session cleared successfully",
+            "micro_memory_created": micro_memory_id is not None,
+            "micro_memory_id": micro_memory_id
         })
         
     except Exception as e:
@@ -684,7 +726,6 @@ def chat_message():
     """
     Legacy chat endpoint (without memory)
     Kept for backward compatibility and debugging
-    Same behaviour as old /index, but without memory integration
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -701,7 +742,7 @@ def chat_message():
         return jsonify({"error": "Message required"}), 400
 
     try:
-        logger.info(f"💾 Saving user message to Firestore (legacy endpoint) for user {user_id}")
+        logger.info(f"💾 Saving user message to Firestore (legacy endpoint)")
         message_ref = db_local.collection("messages").add({
             "user_id": user_id,
             "role": "user",
@@ -748,7 +789,7 @@ def chat_message():
 def initialize_services():
     """Initialize Firebase and OpenAI on startup"""
     logger.info("=" * 60)
-    logger.info("🚀 Starting Zentrafuge v9 Backend with Memory Integration")
+    logger.info("🚀 Starting Zentrafuge v9 Backend - Memory System v2.0")
     logger.info("=" * 60)
     logger.info("🔄 Initializing services on startup...")
     
@@ -777,7 +818,11 @@ def initialize_services():
         logger.warning("   Set this in production for persistent encryption!")
     
     logger.info("=" * 60)
-    logger.info("🧠 Memory System: ENABLED")
+    logger.info("🧠 Memory System v2.0: ENABLED")
+    logger.info("   - Persistent Facts: ✅")
+    logger.info("   - Micro Memories (14-day decay): ✅")
+    logger.info("   - Super Memories (consolidation): ✅")
+    logger.info("   - Auto fact extraction: ✅")
     logger.info("💙 Emotional Intelligence: ENABLED")
     logger.info("🔒 Encryption: ENABLED")
     logger.info("=" * 60)
@@ -785,7 +830,7 @@ def initialize_services():
     return firebase_db is not None and openai_client_instance is not None
 
 
-# Initialize services when module loads (not just in __main__)
+# Initialize services when module loads
 initialize_services()
 
 
@@ -796,6 +841,6 @@ initialize_services()
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     logger.info(f"🌐 Starting Flask development server on port {port}")
-    logger.info(f"🧠 Memory integration: ACTIVE")
+    logger.info(f"🧠 Memory system v2.0: ACTIVE")
     logger.info(f"💙 Personality system: ACTIVE")
     app.run(host="0.0.0.0", port=port, debug=False)
