@@ -485,3 +485,31 @@ p {
     font-size: 1.7rem;
   }
 }
+/* Logo in header */
+
+.zf-logo-link {
+  display: inline-flex;
+  align-items: center;
+}
+
+.zf-logo-img {
+  height: 34px;
+  width: auto;
+  display: block;
+}
+
+/* Green DONATE button */
+
+.zf-btn-donate {
+  padding: 0.45rem 0.95rem;
+  font-size: 0.85rem;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #02220b;
+  border: 1px solid rgba(34, 197, 94, 0.95);
+  box-shadow: 0 12px 30px rgba(22, 163, 74, 0.5);
+}
+
+.zf-btn-donate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 38px rgba(22, 163, 74, 0.7);
+}
