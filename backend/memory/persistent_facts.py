@@ -231,21 +231,24 @@ class PersistentFacts:
             # ============================================================
             # EXTRACT NAME (with nickname support)
             # ============================================================
+            import re
+            
+            # Use word boundaries to prevent false matches like "feeling" matching "i am"
             name_patterns = [
-                "my name is ",
-                "i'm called ",
-                "call me ",
-                "i am ",
-                "name's ",
-                "i'm "  # Added for "I'm Anthony"
+                (r'\bmy name is\s+(\w+)', 1),
+                (r"\bi'm called\s+(\w+)", 1),
+                (r'\bcall me\s+(\w+)', 1),
+                (r"\bname'?s\s+(\w+)", 1),
             ]
-            for pattern in name_patterns:
-                if pattern in message_lower:
-                    start_idx = message_lower.index(pattern) + len(pattern)
-                    rest = user_message[start_idx:].strip()
-                    name = rest.split()[0].strip('.,!?').capitalize()
+            
+            for pattern, group_idx in name_patterns:
+                match = re.search(pattern, message_lower)
+                if match:
+                    name = match.group(group_idx).capitalize()
                     
-                    if name and len(name) > 1 and name.isalpha():
+                    # Validate: must be alphabetic, 2+ chars, not a common word
+                    common_words = ['going', 'feeling', 'doing', 'having', 'getting', 'being']
+                    if name and len(name) > 1 and name.isalpha() and name.lower() not in common_words:
                         self.set_fact('identity', 'name', name, 'conversation')
                         extracted_count += 1
                         logger.info(f"📝 Auto-extracted name: {name}")
