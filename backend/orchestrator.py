@@ -192,6 +192,15 @@ class CaelOrchestrator:
             if not clean_message:
                 return self._create_error_response("Message could not be processed")
 
+            # ============================================================
+            # HANDLE SPECIAL GREETING REQUESTS
+            # ============================================================
+            if clean_message == "[GREETING_RETURNING]":
+                return await self._generate_personalized_greeting(is_first_time=False)
+            elif clean_message == "[GREETING_FIRST]":
+                return await self._generate_personalized_greeting(is_first_time=True)
+            # ============================================================
+
             # Add to current session
             self.memory.add_message_to_session('user', clean_message)
 
@@ -511,6 +520,122 @@ User Profile:
             logger.info(f"✅ Session ended, micro memory created: {micro_memory_id}")
         
         return micro_memory_id
+
+    async def _generate_personalized_greeting(self, is_first_time: bool = False) -> Dict[str, Any]:
+        """
+        Generate a personalized greeting using AI with full context
+        
+        Args:
+            is_first_time: Whether this is the user's first conversation
+            
+        Returns:
+            Response dict with personalized greeting
+        """
+        try:
+            # Get current time context
+            now = datetime.utcnow()
+            current_time = now.strftime("%H:%M UTC")
+            current_date = now.strftime("%A, %B %d, %Y")
+            hour = now.hour
+            
+            # Determine time of day
+            if 5 <= hour < 12:
+                time_of_day = "morning"
+            elif 12 <= hour < 17:
+                time_of_day = "afternoon"
+            elif 17 <= hour < 21:
+                time_of_day = "evening"
+            else:
+                time_of_day = "late night"
+            
+            # Build greeting prompt with full context
+            memory_context = self.memory.get_context_for_prompt(max_micro_memories=3)
+            
+            if is_first_time:
+                greeting_instructions = """
+You are greeting a user for the FIRST TIME. Be warm, welcoming, and introduce yourself.
+- Use their name if you know it
+- Acknowledge the time of day naturally
+- Set a supportive, friendly tone
+- Keep it conversational (2-3 sentences max)
+- Example: "Good evening, Anthony! I'm Cael, and I'm here to support you. 
+  It's getting late - how are you feeling tonight?"
+                """.strip()
+            else:
+                greeting_instructions = f"""
+You are greeting a RETURNING USER. Be personal, warm, and contextual.
+- Current time: {current_time} ({time_of_day})
+- Use their name if you know it
+- Reference time of day in a natural, caring way
+- If it's very late/early, show gentle concern about sleep/wellbeing
+- Reference recent topics if relevant
+- Keep it natural and conversational (2-3 sentences max)
+- Examples:
+  * "Welcome back, Ant! You're up early at 4:30 AM - have you been able to sleep? 
+    Is anything on your mind?"
+  * "Good evening! I see it's been a few days since we last talked. 
+    How have things been with Audrey and the software project?"
+  * "Hi there! It's pretty late - how are you holding up tonight?"
+                """.strip()
+            
+            system_prompt = f"""
+{self.being_code}
+
+{memory_context}
+
+GREETING INSTRUCTIONS:
+{greeting_instructions}
+
+Current Context:
+- Date: {current_date}
+- Time: {current_time}
+- Time of day: {time_of_day}
+
+Generate a warm, personalized greeting now.
+            """.strip()
+            
+            # Generate greeting
+            response = self.openai_client.chat.completions.create(
+                model=self.model_config["primary"],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": "[Generate greeting]"}
+                ],
+                max_tokens=150,
+                temperature=0.8  # Slightly higher for more natural variation
+            )
+            
+            greeting = response.choices[0].message.content
+            
+            logger.info(f"✨ Generated personalized greeting (first_time={is_first_time})")
+            
+            # Don't add to session (greeting doesn't count as conversation)
+            
+            return {
+                "success": True,
+                "response": greeting,
+                "metadata": {
+                    "model_used": self.model_config["primary"],
+                    "tokens_used": response.usage.total_tokens,
+                    "is_greeting": True,
+                    "is_first_time": is_first_time,
+                    "time_of_day": time_of_day
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to generate personalized greeting: {e}")
+            # Fallback greeting
+            if is_first_time:
+                fallback = "Hello! I'm Cael, your AI companion. What would you like to talk about today?"
+            else:
+                fallback = "Welcome back! What would you like to talk about?"
+            
+            return {
+                "success": True,
+                "response": fallback,
+                "metadata": {"is_greeting": True, "is_fallback": True}
+            }
 
     def get_conversation_summary(self) -> Dict[str, Any]:
         """Get summary of current conversation session"""
