@@ -1,4 +1,5 @@
 // js/chat.js - Chat functionality (Zentrafuge v9, UK Veterans)
+// UPDATED: AI-generated personalized greetings
 
 import Config from './config.js';
 import { sendChatMessage } from './api.js';
@@ -119,7 +120,14 @@ async function checkAuthentication() {
       name: user.displayName,
     });
 
-    // Show smart welcome message (changed from showWelcomeMessage)
+    // UPDATED: Initialize SessionLifecycle for session persistence
+    const token = await user.getIdToken();
+    if (window.SessionLifecycle) {
+      window.SessionLifecycle.init(token);
+      console.log('✅ Session lifecycle initialized');
+    }
+
+    // Show AI-generated welcome message
     await showSmartWelcomeMessage();
     
   } catch (error) {
@@ -143,13 +151,15 @@ async function checkAuthentication() {
   }
 }
 
-// NEW: Smart welcome message that checks conversation history
+// UPDATED: AI-generated welcome message with personalization
 async function showSmartWelcomeMessage() {
   try {
-    // Check if user has any previous messages
     const token = await currentUser.getIdToken();
     
-    // Try to get conversation summary to see if this is first chat
+    // Show typing indicator while generating greeting
+    showTypingIndicator();
+    
+    // Check conversation summary to determine context
     const summaryResponse = await fetch(`${Config.API_BASE}/conversation/summary`, {
       method: 'GET',
       headers: {
@@ -158,36 +168,51 @@ async function showSmartWelcomeMessage() {
       }
     });
     
-    if (summaryResponse.ok) {
-      const summary = await summaryResponse.json();
-      
-      if (summary.summary && summary.summary.message_count > 0) {
-        // Returning user - show personalized greeting
-        addMessage(
-          "Welcome back! I remember our previous conversations. What would you like to talk about?",
-          'assistant'
-        );
-      } else {
-        // First time user - show full introduction
-        addMessage(
-          "Hello! I'm Cael, your AI companion. I'm here to learn about you and grow alongside you. What would you like to talk about today?",
-          'assistant'
-        );
-      }
-    } else {
+    if (!summaryResponse.ok) {
       // Fallback to simple greeting if summary fails
-      addMessage(
-        "Hello! What would you like to talk about today?",
-        'assistant'
-      );
+      hideTypingIndicator();
+      addMessage("Hello! What would you like to talk about today?", 'assistant');
+      return;
     }
+    
+    const summary = await summaryResponse.json();
+    const messageCount = summary.summary?.message_count || 0;
+    
+    // Generate AI greeting based on context
+    // The [GREETING] prefix tells the backend to generate a personalized greeting
+    let greetingPrompt;
+    
+    if (messageCount > 0) {
+      // Returning user - request contextual greeting
+      greetingPrompt = "[GREETING_RETURNING]";
+    } else {
+      // First-time user - request warm introduction
+      greetingPrompt = "[GREETING_FIRST]";
+    }
+    
+    // Send to backend to generate personalized greeting
+    const greetingResponse = await sendChatMessage(token, greetingPrompt);
+    
+    // Hide typing indicator
+    hideTypingIndicator();
+    
+    if (greetingResponse && (greetingResponse.reply || greetingResponse.response)) {
+      const greeting = greetingResponse.reply || greetingResponse.response;
+      addMessage(greeting, 'assistant');
+    } else {
+      // Fallback if AI greeting fails
+      if (messageCount > 0) {
+        addMessage("Welcome back! What would you like to talk about?", 'assistant');
+      } else {
+        addMessage("Hello! I'm Cael. What would you like to talk about today?", 'assistant');
+      }
+    }
+    
   } catch (error) {
-    console.error('Error checking conversation history:', error);
-    // Fallback greeting
-    addMessage(
-      "Hello! What would you like to talk about today?",
-      'assistant'
-    );
+    console.error('Error generating welcome message:', error);
+    hideTypingIndicator();
+    // Simple fallback
+    addMessage("Hello! What would you like to talk about today?", 'assistant');
   }
 }
 
@@ -302,11 +327,22 @@ function scrollToBottom() {
 
 async function handleLogout() {
   try {
+    // UPDATED: Save session before logout
+    if (window.SessionLifecycle && window.SessionLifecycle.authToken) {
+      console.log('💾 Saving session before logout...');
+      await window.SessionLifecycle.logout();
+    }
+    
+    // Then do Firebase logout
     await firebase.auth().signOut();
+    
     // Login page is /index.html at root
     window.location.replace('/');
   } catch (error) {
     console.error('Logout error:', error);
+    // Even if session save fails, still logout
+    await firebase.auth().signOut();
+    window.location.replace('/');
   }
 }
 
