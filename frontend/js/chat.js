@@ -74,7 +74,7 @@ async function checkAuthentication() {
 
     if (!user) {
       console.log('❌ No authenticated user, redirecting to login');
-      window.location.href = '/';
+      window.location.href = '/html/login.html';
       return;
     }
 
@@ -82,7 +82,7 @@ async function checkAuthentication() {
     if (!user.emailVerified) {
       console.log('⚠️ Email not verified, redirecting to login');
       await firebase.auth().signOut();
-      window.location.href = '/';
+      window.location.href = '/html/login.html';
       return;
     }
 
@@ -336,13 +336,13 @@ async function handleLogout() {
     // Then do Firebase logout
     await firebase.auth().signOut();
     
-    // Login page is /index.html at root
-    window.location.replace('/');
+    // CHANGED: Login page is now /html/login.html
+    window.location.replace('/html/login.html');
   } catch (error) {
     console.error('Logout error:', error);
     // Even if session save fails, still logout
     await firebase.auth().signOut();
-    window.location.replace('/');
+    window.location.replace('/html/login.html');
   }
 }
 
