@@ -10,6 +10,8 @@ import json
 import logging
 import time
 import asyncio
+import signal
+import atexit
 from datetime import datetime
 
 from flask import Flask, request, jsonify
@@ -780,6 +782,88 @@ def chat_message():
             "Please try again soon."
         )
         return jsonify({"success": True, "response": fallback, "fallback": True})
+
+
+# -----------------------------------------------------------------------------
+# Server Shutdown Handler (Critical for Render Redeploys)
+# -----------------------------------------------------------------------------
+
+def shutdown_handler(signum=None, frame=None):
+    """
+    Save all active sessions before server shutdown
+    
+    This is CRITICAL for Render deployments because:
+    - Render sends SIGTERM before killing the process
+    - Without this, all active sessions are lost
+    - Users lose their conversation context
+    
+    Called on:
+    - SIGTERM (Render redeploy, manual stop)
+    - SIGINT (Ctrl+C)
+    - atexit (Python cleanup)
+    """
+    try:
+        signal_name = "SHUTDOWN"
+        if signum == signal.SIGTERM:
+            signal_name = "SIGTERM"
+        elif signum == signal.SIGINT:
+            signal_name = "SIGINT"
+        
+        logger.info("=" * 60)
+        logger.info(f"🛑 Server shutdown detected ({signal_name})")
+        logger.info(f"💾 Saving {len(user_orchestrators)} active sessions...")
+        logger.info("=" * 60)
+        
+        if not user_orchestrators:
+            logger.info("✅ No active sessions to save")
+            return
+        
+        # Save each active session
+        saved_count = 0
+        failed_count = 0
+        
+        for user_id, orchestrator in list(user_orchestrators.items()):
+            try:
+                logger.info(f"💾 Saving session for user {user_id}...")
+                
+                # Create new event loop for this session
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                try:
+                    # End session and create micro memory
+                    micro_memory_id = loop.run_until_complete(
+                        orchestrator.end_session(reason="server_shutdown")
+                    )
+                    
+                    if micro_memory_id:
+                        logger.info(f"✅ Saved session for {user_id}: {micro_memory_id}")
+                        saved_count += 1
+                    else:
+                        logger.info(f"⏭️ Session too short for {user_id}")
+                        
+                finally:
+                    loop.close()
+                    
+            except Exception as e:
+                logger.error(f"❌ Failed to save session for {user_id}: {e}")
+                failed_count += 1
+        
+        logger.info("=" * 60)
+        logger.info(f"💾 Shutdown save complete:")
+        logger.info(f"   ✅ Saved: {saved_count}")
+        logger.info(f"   ⏭️ Skipped (too short): {len(user_orchestrators) - saved_count - failed_count}")
+        logger.info(f"   ❌ Failed: {failed_count}")
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.error(f"❌ Critical error in shutdown handler: {e}")
+
+
+# Register shutdown handlers
+signal.signal(signal.SIGTERM, shutdown_handler)  # Render redeploy
+signal.signal(signal.SIGINT, shutdown_handler)   # Ctrl+C
+atexit.register(shutdown_handler)                 # Python cleanup
 
 
 # -----------------------------------------------------------------------------
