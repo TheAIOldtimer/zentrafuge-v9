@@ -64,8 +64,8 @@ export async function registerUser(formData) {
     );
 
     setTimeout(() => {
-      // Use absolute path to root
-      window.location.href = '/';
+      // CHANGED: Point to new login location
+      window.location.href = '/html/login.html';
     }, Config.REDIRECT_DELAY || 3000);
   } catch (error) {
     console.error('Registration error:', error);

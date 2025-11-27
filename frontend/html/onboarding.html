@@ -313,7 +313,7 @@
             firebase.auth().onAuthStateChanged((user) => {
                 if (!user) {
                     // Redirect to login if not authenticated
-                    window.location.replace('/');
+                    window.location.replace('/html/login.html');
                 }
             });
 

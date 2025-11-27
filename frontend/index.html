@@ -2,59 +2,273 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Zentrafuge v9 - AI Companion Platform</title>
+  <title>Zentrafuge – A Quiet Companion for Veterans</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Zentrafuge is a calm, private AI companion designed to support veterans who feel isolated, overwhelmed, or in transition." />
   <link rel="icon" type="image/png" href="assets/Zentrafuge-WIDE-Logo-Transparent.png" />
-  <!-- Firebase SDK -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
-  <!-- CSS -->
-  <link rel="stylesheet" href="css/base.css" />
-  <link rel="stylesheet" href="css/components.css" />
-  <link rel="stylesheet" href="css/auth.css" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="auth-container">
-    <div class="card">
-      <img src="assets/Zentrafuge-WIDE-Logo-Transparent.png" alt="Zentrafuge" class="logo" />
-      <h1>Welcome Back</h1>
-      <p class="subtitle">Sign in to continue your AI companion journey</p>
-      <div id="loading" class="loading hidden">
-        <div class="spinner"></div>
-        <p>Signing you in...</p>
+  <header class="zf-header">
+    <div class="zf-container zf-header-inner">
+      <div class="zf-logo">
+        <span class="zf-logo-mark">Z</span>
+        <span class="zf-logo-text">Zentrafuge</span>
       </div>
-      <div id="message"></div>
-      <form id="login-form" autocomplete="on">
-        <div class="form-group">
-          <label for="email">Email Address</label>
-          <input 
-            type="email" 
-            id="email" 
-            name="email"
-            autocomplete="email"
-            required 
-          />
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input 
-            type="password" 
-            id="password" 
-            name="password"
-            autocomplete="current-password"
-            required 
-          />
-        </div>
-        <button type="submit" class="btn">Sign In</button>
-      </form>
-      <div class="auth-link">
-        Don't have an account? <a href="/html/register.html">Create one here</a>
-      </div>
+      <nav class="zf-nav">
+        <a href="#about">About</a>
+        <a href="#veterans">For Veterans</a>
+        <a href="#partners">For Organisations</a>
+        <a href="#interest" class="zf-nav-cta">Register Interest</a>
+      </nav>
     </div>
-  </div>
-  <!-- JavaScript -->
-  <script src="js/firebase-init.js"></script>
-  <script type="module" src="js/login.js"></script>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="zf-hero" id="top">
+      <div class="zf-container zf-hero-inner">
+        <div class="zf-hero-copy">
+          <h1>A quiet, private companion for UK veterans.</h1>
+          <p>
+            Zentrafuge is a calm AI space for veterans who feel isolated, overwhelmed,
+            or stuck between military and civilian life. No judgement. No labels.
+            Just a steady presence that listens and remembers.
+          </p>
+          <div class="zf-hero-actions">
+            <a href="#interest" class="zf-btn zf-btn-primary">Join the pilot list</a>
+            <a href="#partners" class="zf-btn zf-btn-ghost">I support veterans</a>
+          </div>
+          <p class="zf-hero-note">
+            Currently in beta. Based in Medway, built with veterans and their supporters.
+          </p>
+        </div>
+
+        <div class="zf-hero-card">
+          <div class="zf-hero-card-header">
+            <span class="zf-pill">Early Access · 2025</span>
+            <h2>What Zentrafuge offers</h2>
+          </div>
+          <ul class="zf-hero-list">
+            <li>🪖 A private AI companion tuned for veteran language and experience</li>
+            <li>🧭 Support through transition, isolation, and difficult nights</li>
+            <li>🧩 Encrypted, memory-aware conversations – not a throwaway chatbot</li>
+            <li>🤝 Designed to complement, not replace, existing services</li>
+          </ul>
+          <p class="zf-hero-card-foot">
+            Want to test it, shape it, or partner with us? Leave your details below.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="zf-section" id="about">
+      <div class="zf-container zf-grid-2">
+        <div>
+          <h2>Built as a refuge, not a product.</h2>
+          <p>
+            Zentrafuge started as a personal project: a calm, always-there companion
+            for people who live with too much noise in their heads and not enough
+            safe places to talk. Over time, it became clear that veterans – especially
+            those feeling forgotten or cut adrift – need this kind of space most.
+          </p>
+          <p>
+            We're building slowly and carefully: encrypted memory, trauma-aware design,
+            and no data-selling. The early Medway pilot will help us prove what works
+            before we scale further.
+          </p>
+        </div>
+        <div class="zf-highlight-box">
+          <h3>What we're working towards</h3>
+          <ul>
+            <li>A trusted AI companion tailored to each veteran</li>
+            <li>Tools to track mood, patterns, and progress over time</li>
+            <li>Bridges to real-world services when more help is needed</li>
+            <li>Free or sponsored access for those who can't pay</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOR VETERANS -->
+    <section class="zf-section zf-section-alt" id="veterans">
+      <div class="zf-container zf-grid-2">
+        <div>
+          <h2>For veterans</h2>
+          <p>
+            Zentrafuge is for the moments between. When it's too late to call anyone,
+            when you don't want to "bother" family, or when you can't find the words
+            for what's going on.
+          </p>
+          <ul class="zf-bullet-list">
+            <li>Talk freely – no judgement, no diagnosis, no paperwork.</li>
+            <li>Let the system remember your story, so you don't have to retell it.</li>
+            <li>Set boundaries: what's on the table and what isn't.</li>
+            <li>Get gentle prompts when you're ready, not lectures when you're not.</li>
+          </ul>
+        </div>
+        <div class="zf-callout">
+          <p class="zf-callout-title">Important</p>
+          <p>
+            Zentrafuge is <strong>not</strong> an emergency service or a replacement
+            for professional care. If you are in immediate danger or feel unable to
+            keep yourself safe, please contact your local emergency services or one
+            of the veteran helplines listed below.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOR PARTNERS -->
+    <section class="zf-section" id="partners">
+      <div class="zf-container zf-grid-2">
+        <div>
+          <h2>For organisations & supporters</h2>
+          <p>
+            We are looking to work with veteran charities, NHS-linked services, and
+            community groups who want to offer their people an additional, low-friction
+            layer of support.
+          </p>
+          <ul class="zf-bullet-list">
+            <li>Offer a complementary out-of-hours support channel.</li>
+            <li>Give veterans a private space to "warm up" before seeking formal help.</li>
+            <li>Co-design features and safeguards that match your standards.</li>
+            <li>Explore sponsored access for those who can't afford subscriptions.</li>
+          </ul>
+        </div>
+        <div class="zf-highlight-box">
+          <h3>Interested in partnering?</h3>
+          <p>
+            Share your details below and select "Organisation / Service" as your role.
+            We'll follow up with a short overview and options for a Medway pilot.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTEREST FORM -->
+    <section class="zf-section zf-section-alt" id="interest">
+      <div class="zf-container zf-form-wrapper">
+        <div class="zf-form-intro">
+          <h2>Register your interest</h2>
+          <p>
+            Whether you're a veteran, family member, supporter, or organisation,
+            leave your details below and we'll keep you updated on the Medway pilot
+            and early access.
+          </p>
+        </div>
+
+        <form
+          class="zf-form"
+          action="https://formspree.io/f/xldjbeyd"
+          method="POST"
+        >
+          <div class="zf-form-row">
+            <div class="zf-field">
+              <label for="name">Name</label>
+              <input id="name" name="name" type="text" required />
+            </div>
+            <div class="zf-field">
+              <label for="email">Email</label>
+              <input id="email" name="_replyto" type="email" required />
+            </div>
+          </div>
+
+          <div class="zf-form-row">
+            <div class="zf-field">
+              <label for="role">I am a...</label>
+              <select id="role" name="role" required>
+                <option value="">Please choose</option>
+                <option value="veteran">Veteran</option>
+                <option value="family">Family member / friend</option>
+                <option value="organisation">Organisation / service</option>
+                <option value="supporter">Supporter / donor</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="zf-field">
+              <label for="location">Location</label>
+              <input id="location" name="location" type="text" placeholder="e.g. Medway, Kent" />
+            </div>
+          </div>
+
+          <div class="zf-field">
+            <label for="message">Anything you'd like us to know?</label>
+            <textarea
+              id="message"
+              name="message"
+              rows="4"
+              placeholder="Optional – e.g. what you're looking for, how Zentrafuge might help, or how you'd like to partner."
+            ></textarea>
+          </div>
+
+          <div class="zf-field zf-field-inline">
+            <input
+              id="consent"
+              name="consent"
+              type="checkbox"
+              value="yes"
+              required
+            />
+            <label for="consent">
+              I consent to Zentrafuge storing my details for the purpose of
+              contacting me about the pilot and related updates.
+            </label>
+          </div>
+
+          <button type="submit" class="zf-btn zf-btn-primary">
+            Submit interest
+          </button>
+
+          <p class="zf-form-footnote">
+            We will only use your details to contact you about Zentrafuge and will
+            never sell your data.
+          </p>
+        </form>
+      </div>
+    </section>
+
+    <!-- SUPPORT LINKS -->
+    <section class="zf-section zf-support">
+      <div class="zf-container">
+        <h2>If you need support right now</h2>
+        <p>
+          Zentrafuge is still in development and is not an emergency service.
+          If you are struggling, you can reach out to:
+        </p>
+        <ul class="zf-support-list">
+          <li>
+            <strong>Combat Stress (24/7 Helpline)</strong> –
+            <a href="tel:+448001381619">0800 138 1619</a> –
+            <a href="https://combatstress.org.uk" target="_blank" rel="noopener">combatstress.org.uk</a>
+          </li>
+          <li>
+            <strong>Veterans' Gateway</strong> –
+            <a href="tel:+448088021212">0808 802 1212</a> –
+            <a href="https://www.veteransgateway.org.uk" target="_blank" rel="noopener">veteransgateway.org.uk</a>
+          </li>
+          <li>
+            <strong>SSAFA Forcesline</strong> –
+            <a href="tel:+448002606767">0800 260 6767</a> –
+            <a href="https://www.ssafa.org.uk/get-help/forcesline" target="_blank" rel="noopener">ssafa.org.uk</a>
+          </li>
+          <li>
+            <strong>NHS Op COURAGE</strong> –
+            <a href="https://www.nhs.uk/opcourage" target="_blank" rel="noopener">Specialist NHS mental health service for veterans</a>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="zf-footer">
+    <div class="zf-container zf-footer-inner">
+      <p>© <span id="year"></span> Zentrafuge Ltd. All rights reserved.</p>
+      <p class="zf-footer-note">Built in Medway, for those who gave more than most.</p>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
 </body>
 </html>
