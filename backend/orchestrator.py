@@ -68,16 +68,16 @@ class CaelOrchestrator:
 
         # Model configuration
         self.model_config = {
-            "primary": "gpt-4o-mini",
-            "premium": "gpt-4-turbo",
-            "fallback": "gpt-3.5-turbo",
-            "emergency": "gpt-3.5-turbo",
-            "max_tokens": 600,
-            "max_tokens_premium": 1000,
-            "temperature": 0.7,
-            "cost_threshold_usd": 10.0,
-            "use_smart_routing": True
-        }
+    "primary": "gpt-4o-mini",
+    "premium": "gpt-4o-mini",      # ← FIXED: Always use cheap model
+    "fallback": "gpt-4o-mini",
+    "emergency": "gpt-4o-mini",
+    "max_tokens": 600,
+    "max_tokens_premium": 800,
+    "temperature": 0.7,
+    "cost_threshold_usd": 10.0,
+    "use_smart_routing": False     # ← FIXED: No automatic upgrades
+}
 
     def _load_being_code(self) -> str:
         """Load Cael's being code (identity and moral contract)"""
