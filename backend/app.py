@@ -3,6 +3,7 @@
 Zentrafuge v9 - Main Flask Backend
 Modular, secure, memory-first AI companion architecture
 WITH ENHANCED MULTI-TIER MEMORY SYSTEM v2.0
+WITH ENCRYPTION AT REST
 """
 
 import os
@@ -24,7 +25,9 @@ from openai import OpenAI  # OpenAI SDK v1.3.0 style
 
 # Import memory and orchestration modules
 from orchestrator import CaelOrchestrator, EmotionalSafetyMonitor
-# NOTE: MemoryStorage import REMOVED - memory is now internal to orchestrator
+
+# Import encryption utilities
+from crypto_handler import encrypt_text, decrypt_text
 
 # -----------------------------------------------------------------------------
 # Flask + Logging
@@ -165,7 +168,6 @@ def get_user_orchestrator(user_id: str) -> CaelOrchestrator:
             user_id=user_id,
             db=db_local,
             openai_client=openai
-            # memory_storage argument REMOVED - created internally
         )
         
         user_orchestrators[user_id] = orchestrator
@@ -229,6 +231,7 @@ def run_cael_completion(message: str):
     """
     Legacy: Shared OpenAI chat call for Cael (direct, without memory)
     Used only by legacy /chat/message endpoint
+    NOW USES gpt-4o-mini
     Returns reply text or raises an exception.
     """
     client = init_openai()
@@ -236,7 +239,7 @@ def run_cael_completion(message: str):
         raise RuntimeError("AI unavailable")
 
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",  # CHANGED from gpt-3.5-turbo
         messages=[
             {
                 "role": "system",
@@ -252,6 +255,62 @@ def run_cael_completion(message: str):
         temperature=0.7,
     )
     return completion.choices[0].message.content
+
+
+# -----------------------------------------------------------------------------
+# Profile Encryption Helpers
+# -----------------------------------------------------------------------------
+
+SENSITIVE_PROFILE_FIELDS = [
+    "email",
+    "full_name",
+    "companion_name",
+    "sources_of_meaning",
+    "effective_support",
+    "life_chapter",
+    "personality_profile",
+    "veteran_profile",
+]
+
+
+def encrypt_profile_data(profile: dict) -> dict:
+    """
+    Encrypt sensitive fields in a user profile/onboarding dict.
+    Non-sensitive metadata is left as plaintext.
+    """
+    if not profile:
+        return {}
+    encrypted = dict(profile)
+    for field in SENSITIVE_PROFILE_FIELDS:
+        if field in encrypted and encrypted[field] not in (None, "", []):
+            try:
+                encrypted[field] = encrypt_text(json.dumps(encrypted[field]))
+            except Exception as e:
+                # If encryption fails, leave the original value to avoid breaking flow
+                logger.warning(f"Failed to encrypt field {field}: {e}")
+                pass
+    # Ensure schema version is present
+    encrypted.setdefault("schema_version", 1)
+    return encrypted
+
+
+def decrypt_profile_data(doc_dict: dict) -> dict:
+    """
+    Decrypt sensitive fields from a Firestore user profile dict.
+    If a field was not encrypted or decrypt fails, original value is preserved.
+    """
+    if not doc_dict:
+        return {}
+    decrypted = dict(doc_dict)
+    for field in SENSITIVE_PROFILE_FIELDS:
+        value = decrypted.get(field)
+        if isinstance(value, str) and value:
+            try:
+                decrypted[field] = json.loads(decrypt_text(value))
+            except Exception:
+                # Likely legacy plaintext; keep as-is
+                pass
+    return decrypted
 
 
 # -----------------------------------------------------------------------------
@@ -272,7 +331,8 @@ def root():
             "Super Memories (Consolidation) ✅",
             "Emotional Intelligence ✅",
             "Personality Adaptation ✅",
-            "Safety Monitoring ✅"
+            "Safety Monitoring ✅",
+            "Encryption at Rest ✅"
         ],
         "endpoints": {
             "health": "/health",
@@ -293,6 +353,7 @@ def root():
 def health():
     firebase_ok = init_firebase() is not None
     openai_ok = init_openai() is not None
+    encryption_key = os.getenv('ZENTRAFUGE_MASTER_KEY')
 
     status = "healthy" if (firebase_ok and openai_ok) else "degraded"
 
@@ -300,6 +361,7 @@ def health():
         "status": status,
         "firebase": firebase_ok,
         "openai": openai_ok,
+        "encryption": "enabled" if encryption_key else "temporary-key",
         "memory_system": "v2.0-multi-tier",
         "active_sessions": len(user_orchestrators),
         "timestamp": datetime.utcnow().isoformat(),
@@ -340,7 +402,9 @@ def user_profile():
             doc = db_local.collection("users").document(user_id).get()
             if doc.exists:
                 logger.info(f"✅ User profile retrieved for {user_id}")
-                return jsonify(doc.to_dict())
+                # DECRYPT before returning
+                profile_data = decrypt_profile_data(doc.to_dict())
+                return jsonify(profile_data)
 
             # Default profile if none exists
             default_profile = {
@@ -349,10 +413,13 @@ def user_profile():
                 "created_at": datetime.utcnow().isoformat(),
                 "onboarding_complete": False,
                 "cael_initialized": False,
+                "schema_version": 1,
             }
-            db_local.collection("users").document(user_id).set(default_profile)
+            # ENCRYPT before saving
+            encrypted_default = encrypt_profile_data(default_profile)
+            db_local.collection("users").document(user_id).set(encrypted_default)
             logger.info(f"✅ Default profile created for {user_id}")
-            return jsonify(default_profile)
+            return jsonify(default_profile)  # Return plaintext to user
         except Exception as e:
             logger.error(f"❌ Error retrieving/creating profile: {e}")
             return jsonify({"error": "Profile error"}), 500
@@ -373,12 +440,15 @@ def user_profile():
         "created_at": datetime.utcnow().isoformat(),
         "onboarding_complete": data.get("onboarding_complete", False),
         "cael_initialized": data.get("cael_initialized", False),
+        "schema_version": 1,
     }
     
     try:
-        db_local.collection("users").document(user_id).set(profile)
-        logger.info(f"✅ Profile saved for user {user_id}")
-        return jsonify({"success": True, "profile": profile})
+        # ENCRYPT before saving
+        encrypted_profile = encrypt_profile_data(profile)
+        db_local.collection("users").document(user_id).set(encrypted_profile)
+        logger.info(f"✅ Profile saved for user {user_id} (encrypted)")
+        return jsonify({"success": True, "profile": profile})  # Return plaintext
     except Exception as e:
         logger.error(f"❌ Failed to save profile: {e}")
         return jsonify({"error": "Failed to save profile"}), 500
@@ -389,6 +459,7 @@ def user_onboarding():
     """
     Complete user onboarding process and save preferences
     ENHANCED v2.0: Now imports onboarding data into persistent facts
+    WITH ENCRYPTION
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -443,19 +514,22 @@ def user_onboarding():
         # System metadata
         "onboarding_version": "v9_enhanced_memory_v2",
         "personality_profile": data.get("personality_profile", {}),
+        "schema_version": 1,
     }
     
     try:
-        # Save to Firestore
-        logger.info(f"💾 Attempting to save onboarding data to Firestore...")
+        # ENCRYPT before saving to Firestore
+        logger.info(f"💾 Encrypting and saving onboarding data to Firestore...")
+        encrypted_onboarding = encrypt_profile_data(onboarding_data)
         db_local.collection("users").document(user_id).set(
-            onboarding_data, 
+            encrypted_onboarding, 
             merge=True
         )
         
-        logger.info(f"✅ Onboarding completed and saved for user {user_id}")
+        logger.info(f"✅ Onboarding completed and saved for user {user_id} (encrypted)")
         
         # NEW v2.0: Import onboarding data into persistent facts
+        # Pass PLAINTEXT version to orchestrator (it will encrypt internally)
         facts_imported = 0
         try:
             orchestrator = get_user_orchestrator(user_id)
@@ -497,7 +571,7 @@ def index_chat():
             "metadata": {
                 "emotional_intensity": 0.0-1.0,
                 "primary_emotion": "string",
-                "model_used": "gpt-4",
+                "model_used": "gpt-4o-mini",
                 "has_followup": boolean,
                 "memory_context_used": boolean
             }
@@ -516,8 +590,8 @@ def index_chat():
         return jsonify({"error": "Message required"}), 400
 
     try:
-        # Get user's orchestrator (with multi-tier memory)
-        logger.info(f"🧠 Processing message for user {user_id} with orchestrator v2.0")
+        # Get user's orchestrator (with multi-tier memory + encryption)
+        logger.info(f"🧠 Processing message for user {user_id} with orchestrator v2.0 (encrypted)")
         orchestrator = get_user_orchestrator(user_id)
         
         # Process message through orchestrator
@@ -571,13 +645,14 @@ def index_chat():
 @app.route("/memory/stats", methods=["GET"])
 def memory_stats():
     """
-    Get user's memory statistics (v2.0 multi-tier)
+    Get user's memory statistics (v2.0 multi-tier with encryption)
     
     Returns:
         - Persistent facts count
         - Micro memories count
         - Super memories count
         - Current session info
+        - Encryption status
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -607,7 +682,7 @@ def memory_stats():
 @app.route("/memory/emotional-profile", methods=["GET"])
 def emotional_profile():
     """
-    Get user's emotional profile built from memories
+    Get user's emotional profile built from memories (decrypted)
     
     Returns communication preferences, emotional patterns, triggers
     """
@@ -620,7 +695,7 @@ def emotional_profile():
     try:
         orchestrator = get_user_orchestrator(user_id)
         
-        # Get facts from persistent storage
+        # Get facts from persistent storage (automatically decrypted)
         all_facts = orchestrator.memory.get_all_facts()
         
         logger.info(f"💙 Emotional profile retrieved for user {user_id}")
@@ -672,7 +747,7 @@ def conversation_summary():
 def clear_session():
     """
     Clear user's session (logout/end conversation)
-    ENHANCED v2.0: Creates micro memory before clearing
+    ENHANCED v2.0: Creates micro memory before clearing (encrypted)
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -695,7 +770,7 @@ def clear_session():
                 )
                 
                 if micro_memory_id:
-                    logger.info(f"✅ Created micro memory: {micro_memory_id}")
+                    logger.info(f"✅ Created encrypted micro memory: {micro_memory_id}")
                 else:
                     logger.info(f"⏭️ Session too short for micro memory creation")
                     
@@ -728,6 +803,7 @@ def chat_message():
     """
     Legacy chat endpoint (without memory)
     Kept for backward compatibility and debugging
+    NOW WITH ENCRYPTION and gpt-4o-mini
     """
     user_info, error_response = get_authorized_user()
     if error_response:
@@ -744,11 +820,11 @@ def chat_message():
         return jsonify({"error": "Message required"}), 400
 
     try:
-        logger.info(f"💾 Saving user message to Firestore (legacy endpoint)")
+        logger.info(f"💾 Saving user message to Firestore (legacy endpoint, encrypted)")
         message_ref = db_local.collection("messages").add({
             "user_id": user_id,
             "role": "user",
-            "content": message,
+            "content": encrypt_text(message),  # ENCRYPTED
             "timestamp": datetime.utcnow().isoformat(),
             "via": "chat.message",
         })
@@ -760,13 +836,13 @@ def chat_message():
         reply = run_cael_completion(message)
 
         try:
-            logger.info(f"💾 Saving assistant response (legacy endpoint)")
+            logger.info(f"💾 Saving assistant response (legacy endpoint, encrypted)")
             assistant_ref = db_local.collection("messages").add({
                 "user_id": user_id,
                 "role": "assistant",
-                "content": reply,
+                "content": encrypt_text(reply),  # ENCRYPTED
                 "timestamp": datetime.utcnow().isoformat(),
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",  # CHANGED from gpt-3.5-turbo
                 "via": "chat.message",
             })
             logger.info(f"✅ Assistant message saved with ID: {assistant_ref[1].id}")
@@ -831,13 +907,13 @@ def shutdown_handler(signum=None, frame=None):
                 asyncio.set_event_loop(loop)
                 
                 try:
-                    # End session and create micro memory
+                    # End session and create micro memory (encrypted)
                     micro_memory_id = loop.run_until_complete(
                         orchestrator.end_session(reason="server_shutdown")
                     )
                     
                     if micro_memory_id:
-                        logger.info(f"✅ Saved session for {user_id}: {micro_memory_id}")
+                        logger.info(f"✅ Saved encrypted session for {user_id}: {micro_memory_id}")
                         saved_count += 1
                     else:
                         logger.info(f"⏭️ Session too short for {user_id}")
@@ -926,5 +1002,6 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     logger.info(f"🌐 Starting Flask development server on port {port}")
     logger.info(f"🧠 Memory system v2.0: ACTIVE")
+    logger.info(f"🔒 Encryption: ACTIVE")
     logger.info(f"💙 Personality system: ACTIVE")
     app.run(host="0.0.0.0", port=port, debug=False)

@@ -2,6 +2,7 @@
 """
 Zentrafuge v9 - Memory Manager
 Central orchestrator for the multi-tier memory system
+WITH ENCRYPTION AT REST
 """
 
 import logging
@@ -14,17 +15,23 @@ from .persistent_facts import PersistentFacts
 from .micro_memory import MicroMemory
 from .memory_consolidator import MemoryConsolidator
 
+# Import encryption utilities
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from crypto_handler import encrypt_text, decrypt_text
+
 logger = logging.getLogger(__name__)
 
 
 class MemoryManager:
     """
-    Central memory management system
+    Central memory management system with encryption
     
     Orchestrates:
-    - Persistent facts (never forgotten)
-    - Micro memories (session summaries with decay)
-    - Super memories (consolidated patterns)
+    - Persistent facts (never forgotten) - ENCRYPTED
+    - Micro memories (session summaries with decay) - ENCRYPTED
+    - Super memories (consolidated patterns) - ENCRYPTED
     - Automatic consolidation when thresholds reached
     """
     
@@ -47,26 +54,26 @@ class MemoryManager:
         self.current_session_messages: List[Dict[str, str]] = []
         self.session_start_time = datetime.utcnow()
         
-        logger.info(f"🧠 Memory Manager initialized for user {user_id}")
+        logger.info(f"🧠 Memory Manager initialized for user {user_id} (encryption enabled)")
     
     # =========================================================================
     # PERSISTENT FACTS API
     # =========================================================================
     
     def set_fact(self, category: str, key: str, value: Any, source: str = "user") -> bool:
-        """Set a persistent fact"""
+        """Set a persistent fact (encrypted)"""
         return self.facts.set_fact(category, key, value, source)
     
     def get_fact(self, category: str, key: str) -> Optional[Any]:
-        """Get a persistent fact"""
+        """Get a persistent fact (decrypted)"""
         return self.facts.get_fact(category, key)
     
     def get_all_facts(self) -> Dict[str, Any]:
-        """Get all persistent facts"""
+        """Get all persistent facts (decrypted)"""
         return self.facts.get_all_facts()
     
     def import_onboarding(self, onboarding_data: Dict[str, Any]) -> int:
-        """Import facts from onboarding data"""
+        """Import facts from onboarding data (will be encrypted)"""
         return self.facts.import_from_onboarding(onboarding_data)
     
     # =========================================================================
@@ -79,17 +86,17 @@ class MemoryManager:
         
         Args:
             role: 'user' or 'assistant'
-            content: Message content
+            content: Message content (will be encrypted when saved)
         """
         self.current_session_messages.append({
             'role': role,
-            'content': content,
+            'content': content,  # Keep plaintext in memory for current session
             'timestamp': datetime.utcnow().isoformat()
         })
     
     async def end_session(self, reason: str = "logout") -> Optional[str]:
         """
-        End current session and create micro memory
+        End current session and create micro memory (encrypted)
         
         Args:
             reason: Reason for ending session (logout, timeout, etc.)
@@ -119,7 +126,7 @@ class MemoryManager:
             # Determine importance
             importance = self._calculate_session_importance(emotional_context, topics)
             
-            # Create micro memory
+            # Create micro memory (encryption happens inside micro.create_micro_memory)
             micro_memory_id = self.micro.create_micro_memory(
                 summary=summary,
                 messages=self.current_session_messages,
@@ -274,7 +281,7 @@ class MemoryManager:
         try:
             for msg in self.current_session_messages:
                 if msg['role'] == 'user':
-                    # Try to extract facts
+                    # Try to extract facts (will be encrypted by facts module)
                     self.facts.extract_facts_from_message(
                         msg['content'],
                         ""  # We don't have AI response here
@@ -283,28 +290,29 @@ class MemoryManager:
             logger.error(f"❌ Failed to extract facts from session: {e}")
     
     # =========================================================================
-    # MEMORY RETRIEVAL FOR AI CONTEXT
+    # MEMORY RETRIEVAL FOR AI CONTEXT (WITH DECRYPTION)
     # =========================================================================
     
     def get_context_for_prompt(self, max_micro_memories: int = 5) -> str:
         """
         Get formatted memory context for AI prompts
+        All encrypted data is decrypted before returning
         
         Args:
             max_micro_memories: Maximum number of recent micro memories to include
             
         Returns:
-            Formatted string with all relevant context
+            Formatted string with all relevant context (decrypted)
         """
         try:
             lines = []
             
-            # 1. Persistent Facts (Always include)
+            # 1. Persistent Facts (Always include) - DECRYPTED
             facts_text = self.facts.get_facts_for_prompt()
             lines.append(facts_text)
             lines.append("")
             
-            # 2. Recent Micro Memories (with decay)
+            # 2. Recent Micro Memories (with decay) - DECRYPTED
             recent_micros = self.micro.get_recent_micro_memories(
                 limit=max_micro_memories,
                 min_importance=2.0,
@@ -314,22 +322,28 @@ class MemoryManager:
             if recent_micros:
                 lines.append("=== RECENT CONVERSATIONS ===")
                 for memory in recent_micros:
+                    # Decrypt summary
+                    summary = decrypt_text(memory.get('summary', ''))
+                    
                     lines.append(f"\nDate: {memory['created_at'][:10]}")
-                    lines.append(f"Summary: {memory['summary']}")
+                    lines.append(f"Summary: {summary}")
                     lines.append(
                         f"Importance: {memory['current_importance']:.1f}/10 "
                         f"(decaying from {memory['importance']:.1f})"
                     )
                 lines.append("")
             
-            # 3. Super Memories (Long-term patterns)
+            # 3. Super Memories (Long-term patterns) - DECRYPTED
             super_memories = self.consolidator.get_all_super_memories(limit=3)
             
             if super_memories:
                 lines.append("=== LONG-TERM PATTERNS ===")
                 for memory in super_memories:
+                    # Decrypt summary
+                    summary = decrypt_text(memory.get('summary', ''))
+                    
                     lines.append(f"\nPeriod: {memory['date_range']['start'][:10]} to {memory['date_range']['end'][:10]}")
-                    lines.append(f"Summary: {memory['summary']}")
+                    lines.append(f"Summary: {summary}")
                     if memory.get('themes'):
                         lines.append(f"Themes: {', '.join(memory['themes'])}")
                 lines.append("")
@@ -356,7 +370,8 @@ class MemoryManager:
                     'duration_minutes': (
                         datetime.utcnow() - self.session_start_time
                     ).total_seconds() / 60
-                }
+                },
+                'encryption': 'enabled'
             }
         except Exception as e:
             logger.error(f"❌ Failed to get memory stats: {e}")

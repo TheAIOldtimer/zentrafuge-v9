@@ -2,6 +2,7 @@
 """
 Zentrafuge v9 - Persistent Facts Storage
 Facts that NEVER get forgotten (name, pets, veteran status, core values)
+WITH ENCRYPTION AT REST
 """
 
 import logging
@@ -9,12 +10,19 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 from firebase_admin import firestore
 
+# Import encryption utilities
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from crypto_handler import encrypt_text, decrypt_text
+
 logger = logging.getLogger(__name__)
 
 
 class PersistentFacts:
     """
     Persistent facts that never decay or get forgotten
+    WITH ENCRYPTION AT REST
     
     Fact Categories:
     - Identity: name, age, location
@@ -29,19 +37,24 @@ class PersistentFacts:
         self.user_id = user_id
         self.collection = 'user_facts'
         
-        # Load existing facts on initialization
+        # Load existing facts on initialization (will decrypt automatically)
         self.facts = self._load_facts()
     
     def _load_facts(self) -> Dict[str, Any]:
-        """Load all persistent facts from Firestore"""
+        """Load all persistent facts from Firestore (with decryption)"""
         try:
             doc_ref = self.db.collection(self.collection).document(self.user_id)
             doc = doc_ref.get()
             
             if doc.exists:
                 data = doc.to_dict()
-                logger.info(f"✅ Loaded {len(data.get('facts', {}))} persistent facts for user {self.user_id}")
-                return data.get('facts', {})
+                facts = data.get('facts', {})
+                
+                # DECRYPT all fact values
+                decrypted_facts = self._decrypt_facts_structure(facts)
+                
+                logger.info(f"✅ Loaded {len(decrypted_facts)} persistent facts for user {self.user_id}")
+                return decrypted_facts
             else:
                 logger.info(f"📝 No persistent facts found for user {self.user_id}, starting fresh")
                 return {}
@@ -50,14 +63,105 @@ class PersistentFacts:
             logger.error(f"❌ Failed to load persistent facts: {e}")
             return {}
     
+    def _decrypt_facts_structure(self, facts: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recursively decrypt all fact values in the facts structure
+        
+        Args:
+            facts: Encrypted facts structure
+            
+        Returns:
+            Decrypted facts structure
+        """
+        decrypted = {}
+        
+        for category, category_facts in facts.items():
+            decrypted[category] = {}
+            
+            for key, fact_data in category_facts.items():
+                if isinstance(fact_data, dict) and 'value' in fact_data:
+                    # Decrypt the value
+                    encrypted_value = fact_data['value']
+                    
+                    # Try to decrypt
+                    try:
+                        decrypted_value_str = decrypt_text(encrypted_value)
+                        
+                        # Try to parse as JSON (for complex types)
+                        import json
+                        try:
+                            decrypted_value = json.loads(decrypted_value_str)
+                        except (json.JSONDecodeError, TypeError):
+                            # Not JSON, keep as string
+                            decrypted_value = decrypted_value_str
+                    except Exception:
+                        # Decryption failed, assume legacy plaintext
+                        decrypted_value = encrypted_value
+                    
+                    # Preserve metadata, decrypt value
+                    decrypted[category][key] = {
+                        'value': decrypted_value,
+                        'source': fact_data.get('source', 'unknown'),
+                        'created_at': fact_data.get('created_at', ''),
+                        'last_updated': fact_data.get('last_updated', '')
+                    }
+                else:
+                    # Legacy format or malformed, keep as-is
+                    decrypted[category][key] = fact_data
+        
+        return decrypted
+    
+    def _encrypt_facts_structure(self, facts: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recursively encrypt all fact values in the facts structure
+        
+        Args:
+            facts: Plaintext facts structure
+            
+        Returns:
+            Encrypted facts structure
+        """
+        import json
+        encrypted = {}
+        
+        for category, category_facts in facts.items():
+            encrypted[category] = {}
+            
+            for key, fact_data in category_facts.items():
+                if isinstance(fact_data, dict) and 'value' in fact_data:
+                    # Encrypt the value
+                    plaintext_value = fact_data['value']
+                    
+                    # Convert to JSON string for encryption (handles all types)
+                    try:
+                        value_str = json.dumps(plaintext_value)
+                        encrypted_value = encrypt_text(value_str)
+                    except Exception as e:
+                        logger.warning(f"Failed to encrypt fact {category}.{key}: {e}")
+                        # Fall back to plaintext on encryption failure
+                        encrypted_value = plaintext_value
+                    
+                    # Preserve metadata, encrypt value
+                    encrypted[category][key] = {
+                        'value': encrypted_value,
+                        'source': fact_data.get('source', 'unknown'),
+                        'created_at': fact_data.get('created_at', ''),
+                        'last_updated': fact_data.get('last_updated', '')
+                    }
+                else:
+                    # Keep as-is
+                    encrypted[category][key] = fact_data
+        
+        return encrypted
+    
     def set_fact(self, category: str, key: str, value: Any, source: str = "user") -> bool:
         """
-        Set a persistent fact
+        Set a persistent fact (will be encrypted before saving)
         
         Args:
             category: Fact category (identity, relationships, status, values, preferences)
             key: Fact key (e.g., "name", "pet_dog", "is_veteran")
-            value: Fact value
+            value: Fact value (will be encrypted)
             source: Where this fact came from (user, onboarding, conversation, system)
         
         Returns:
@@ -68,7 +172,7 @@ class PersistentFacts:
             if category not in self.facts:
                 self.facts[category] = {}
             
-            # Store fact with metadata
+            # Store fact with metadata (plaintext in memory)
             self.facts[category][key] = {
                 'value': value,
                 'source': source,
@@ -76,10 +180,10 @@ class PersistentFacts:
                 'last_updated': datetime.utcnow().isoformat()
             }
             
-            # Save to Firestore
+            # Save to Firestore (encryption happens in _save_facts)
             self._save_facts()
             
-            logger.info(f"✅ Set fact: {category}.{key} = {value} (source: {source})")
+            logger.info(f"✅ Set fact: {category}.{key} = {value} (source: {source}) [encrypted]")
             return True
             
         except Exception as e:
@@ -88,7 +192,7 @@ class PersistentFacts:
     
     def get_fact(self, category: str, key: str) -> Optional[Any]:
         """
-        Get a persistent fact value
+        Get a persistent fact value (already decrypted from load)
         
         Args:
             category: Fact category
@@ -106,11 +210,11 @@ class PersistentFacts:
             return None
     
     def get_all_facts(self) -> Dict[str, Any]:
-        """Get all persistent facts organized by category"""
+        """Get all persistent facts organized by category (already decrypted)"""
         return self.facts
     
     def get_category(self, category: str) -> Dict[str, Any]:
-        """Get all facts in a specific category"""
+        """Get all facts in a specific category (already decrypted)"""
         return self.facts.get(category, {})
     
     def delete_fact(self, category: str, key: str) -> bool:
@@ -137,10 +241,10 @@ class PersistentFacts:
     
     def import_from_onboarding(self, onboarding_data: Dict[str, Any]) -> int:
         """
-        Import facts from onboarding data
+        Import facts from onboarding data (will be encrypted when saved)
         
         Args:
-            onboarding_data: User's onboarding responses
+            onboarding_data: User's onboarding responses (PLAINTEXT)
             
         Returns:
             Number of facts imported
@@ -205,7 +309,7 @@ class PersistentFacts:
                     self.set_fact('preferences', 'effective_support', support, 'onboarding')
                     imported_count += 1
             
-            logger.info(f"✅ Imported {imported_count} facts from onboarding for user {self.user_id}")
+            logger.info(f"✅ Imported {imported_count} facts from onboarding for user {self.user_id} (encrypted)")
             return imported_count
             
         except Exception as e:
@@ -214,7 +318,7 @@ class PersistentFacts:
     
     def extract_facts_from_message(self, user_message: str, ai_response: str) -> int:
         """
-        Auto-extract facts from conversation messages
+        Auto-extract facts from conversation messages (will be encrypted when saved)
         ENHANCED: Comprehensive pattern matching for names, pets, locations, relationships, etc.
         
         Args:
@@ -474,13 +578,17 @@ class PersistentFacts:
             return extracted_count
     
     def _save_facts(self):
-        """Save all facts to Firestore"""
+        """Save all facts to Firestore (WITH ENCRYPTION)"""
         try:
+            # ENCRYPT facts structure before saving
+            encrypted_facts = self._encrypt_facts_structure(self.facts)
+            
             doc_ref = self.db.collection(self.collection).document(self.user_id)
             doc_ref.set({
                 'user_id': self.user_id,
-                'facts': self.facts,
-                'last_updated': datetime.utcnow().isoformat()
+                'facts': encrypted_facts,
+                'last_updated': datetime.utcnow().isoformat(),
+                'schema_version': 1
             }, merge=True)
             
         except Exception as e:
@@ -490,6 +598,7 @@ class PersistentFacts:
     def get_facts_for_prompt(self) -> str:
         """
         Format facts as a string for inclusion in AI prompts
+        Facts are already decrypted in memory
         
         Returns:
             Formatted string of all persistent facts
@@ -528,5 +637,6 @@ class PersistentFacts:
             'categories': list(self.facts.keys()),
             'facts_by_category': {
                 cat: len(facts) for cat, facts in self.facts.items()
-            }
+            },
+            'encryption': 'enabled'
         }

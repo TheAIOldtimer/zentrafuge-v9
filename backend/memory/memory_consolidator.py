@@ -2,6 +2,7 @@
 """
 Zentrafuge v9 - Memory Consolidator
 Consolidates multiple micro memories into super memories (10 micro → 1 super)
+WITH ENCRYPTION AT REST
 """
 
 import logging
@@ -10,16 +11,23 @@ from typing import Dict, Any, List, Optional
 from firebase_admin import firestore
 from openai import OpenAI
 
+# Import encryption utilities
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from crypto_handler import encrypt_text, decrypt_text
+
 logger = logging.getLogger(__name__)
 
 
 class MemoryConsolidator:
     """
     Consolidates micro memories into super memories
+    WITH ENCRYPTION AT REST
     
     - Waits for 10+ unconsolidated micro memories
     - Uses OpenAI to summarize themes, patterns, and key facts
-    - Creates a super memory document
+    - Creates a super memory document (encrypted)
     - Marks source micro memories as consolidated
     """
     
@@ -52,6 +60,7 @@ class MemoryConsolidator:
     async def consolidate_memories(self, micro_memory) -> Optional[str]:
         """
         Consolidate unconsolidated micro memories into a super memory
+        Micro memories are automatically decrypted by MicroMemory.get_recent_micro_memories()
         
         Args:
             micro_memory: MicroMemory instance
@@ -60,7 +69,7 @@ class MemoryConsolidator:
             super_memory_id or None if consolidation not performed
         """
         try:
-            # Get unconsolidated micro memories
+            # Get unconsolidated micro memories (ALREADY DECRYPTED by micro_memory module)
             memories_to_consolidate = micro_memory.get_recent_micro_memories(
                 limit=self.CONSOLIDATION_THRESHOLD,
                 min_importance=2.0,  # Only consolidate meaningful memories
@@ -78,14 +87,14 @@ class MemoryConsolidator:
                 f"🔄 Starting consolidation of {len(memories_to_consolidate)} micro memories..."
             )
             
-            # Generate consolidation summary using OpenAI
+            # Generate consolidation summary using OpenAI (works with decrypted data)
             consolidation = await self._generate_consolidation(memories_to_consolidate)
             
             if not consolidation:
                 logger.error("❌ Failed to generate consolidation")
                 return None
             
-            # Create super memory
+            # Create super memory (will be encrypted)
             super_memory_id = self._create_super_memory(
                 consolidation,
                 memories_to_consolidate
@@ -95,7 +104,7 @@ class MemoryConsolidator:
             for memory in memories_to_consolidate:
                 micro_memory.mark_as_consolidated(memory['memory_id'])
             
-            logger.info(f"✅ Consolidation complete: created super memory {super_memory_id}")
+            logger.info(f"✅ Consolidation complete: created super memory {super_memory_id} [encrypted]")
             
             return super_memory_id
             
@@ -109,15 +118,16 @@ class MemoryConsolidator:
     ) -> Optional[Dict[str, Any]]:
         """
         Use OpenAI to generate a consolidated summary of micro memories
+        Micro memories are already decrypted at this point
         
         Args:
-            micro_memories: List of micro memories to consolidate
+            micro_memories: List of DECRYPTED micro memories to consolidate
             
         Returns:
             Consolidation data or None
         """
         try:
-            # Build prompt with micro memory summaries
+            # Build prompt with micro memory summaries (already decrypted)
             prompt = self._build_consolidation_prompt(micro_memories)
             
             # Call OpenAI
@@ -154,7 +164,7 @@ class MemoryConsolidator:
             emotional_patterns = self._extract_emotional_patterns(micro_memories)
             
             return {
-                'summary': consolidation_text,
+                'summary': consolidation_text,  # Will be encrypted when saved
                 'themes': themes,
                 'topics': topics,
                 'emotional_patterns': emotional_patterns,
@@ -169,7 +179,10 @@ class MemoryConsolidator:
         self,
         micro_memories: List[Dict[str, Any]]
     ) -> str:
-        """Build prompt for OpenAI consolidation"""
+        """
+        Build prompt for OpenAI consolidation
+        Micro memories are already decrypted at this point
+        """
         lines = [
             f"Consolidate these {len(micro_memories)} conversation summaries into "
             f"a single super memory:\n"
@@ -178,7 +191,7 @@ class MemoryConsolidator:
         for i, memory in enumerate(micro_memories, 1):
             lines.append(f"\n=== Session {i} ===")
             lines.append(f"Date: {memory['created_at'][:10]}")
-            lines.append(f"Summary: {memory['summary']}")
+            lines.append(f"Summary: {memory['summary']}")  # Already decrypted
             lines.append(f"Topics: {', '.join(memory.get('topics', []))}")
             
             emotional = memory.get('emotional_context', {})
@@ -197,7 +210,10 @@ class MemoryConsolidator:
         return "\n".join(lines)
     
     def _extract_themes(self, micro_memories: List[Dict[str, Any]]) -> List[str]:
-        """Extract common themes from micro memories"""
+        """
+        Extract common themes from micro memories
+        Summaries are already decrypted at this point
+        """
         theme_keywords = {
             'personal_growth': ['growth', 'learning', 'change', 'progress', 'development'],
             'relationships': ['friend', 'family', 'partner', 'relationship', 'social'],
@@ -212,7 +228,7 @@ class MemoryConsolidator:
         # Count keyword occurrences
         theme_counts: Dict[str, int] = {}
         for memory in micro_memories:
-            summary_lower = memory['summary'].lower()
+            summary_lower = memory['summary'].lower()  # Already decrypted
             
             for theme, keywords in theme_keywords.items():
                 if any(keyword in summary_lower for keyword in keywords):
@@ -226,7 +242,7 @@ class MemoryConsolidator:
         return themes
     
     def _extract_topics(self, micro_memories: List[Dict[str, Any]]) -> List[str]:
-        """Extract and count topics from micro memories"""
+        """Extract and count topics from micro memories (topics are plaintext metadata)"""
         topic_counts: Dict[str, int] = {}
         
         for memory in micro_memories:
@@ -246,7 +262,7 @@ class MemoryConsolidator:
         self,
         micro_memories: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Analyze emotional patterns across micro memories"""
+        """Analyze emotional patterns across micro memories (emotional_context is plaintext metadata)"""
         emotions: List[str] = []
         intensities: List[float] = []
         
@@ -286,9 +302,10 @@ class MemoryConsolidator:
     ) -> str:
         """
         Create a super memory document in Firestore
+        WITH ENCRYPTION
         
         Args:
-            consolidation: Consolidation data from OpenAI
+            consolidation: Consolidation data from OpenAI (plaintext)
             source_memories: List of source micro memories
             
         Returns:
@@ -297,30 +314,34 @@ class MemoryConsolidator:
         try:
             timestamp = datetime.utcnow()
             
+            # ENCRYPT summary before saving
+            encrypted_summary = encrypt_text(consolidation['summary'])
+            
             super_memory = {
-                'user_id': self.user_id,
-                'summary': consolidation['summary'],
-                'themes': consolidation['themes'],
-                'topics': consolidation['topics'],
-                'emotional_patterns': consolidation['emotional_patterns'],
-                'source_memory_count': len(source_memories),
-                'source_memory_ids': [m['memory_id'] for m in source_memories],
-                'date_range': {
+                'user_id': self.user_id,  # Plaintext (for rules)
+                'summary': encrypted_summary,  # ENCRYPTED
+                'themes': consolidation['themes'],  # Plaintext metadata
+                'topics': consolidation['topics'],  # Plaintext metadata
+                'emotional_patterns': consolidation['emotional_patterns'],  # Plaintext metadata
+                'source_memory_count': len(source_memories),  # Plaintext metadata
+                'source_memory_ids': [m['memory_id'] for m in source_memories],  # Plaintext metadata
+                'date_range': {  # Plaintext metadata
                     'start': source_memories[-1]['created_at'],  # Oldest
                     'end': source_memories[0]['created_at']      # Newest
                 },
-                'created_at': timestamp.isoformat(),
-                'last_accessed': timestamp.isoformat(),
-                'access_count': 0,
-                'importance': 7.0,  # Super memories start at higher importance
-                'type': 'super'
+                'created_at': timestamp.isoformat(),  # Plaintext metadata
+                'last_accessed': timestamp.isoformat(),  # Plaintext metadata
+                'access_count': 0,  # Plaintext metadata
+                'importance': 7.0,  # Super memories start at higher importance (plaintext metadata)
+                'type': 'super',  # Plaintext metadata
+                'schema_version': 1  # Plaintext metadata
             }
             
             # Add to Firestore
             doc_ref = self.db.collection(self.collection).add(super_memory)
             super_memory_id = doc_ref[1].id
             
-            logger.info(f"✅ Created super memory {super_memory_id}")
+            logger.info(f"✅ Created super memory {super_memory_id} [encrypted]")
             
             return super_memory_id
             
@@ -329,7 +350,16 @@ class MemoryConsolidator:
             raise
     
     def get_super_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
-        """Get a specific super memory by ID"""
+        """
+        Get a specific super memory by ID
+        WITH DECRYPTION
+        
+        Args:
+            memory_id: ID of super memory
+            
+        Returns:
+            Decrypted super memory or None
+        """
         try:
             doc_ref = self.db.collection(self.collection).document(memory_id)
             doc = doc_ref.get()
@@ -339,6 +369,10 @@ class MemoryConsolidator:
             
             memory = doc.to_dict()
             memory['memory_id'] = memory_id
+            
+            # DECRYPT summary
+            if 'summary' in memory:
+                memory['summary'] = decrypt_text(memory['summary'])
             
             # Update access tracking
             doc_ref.update({
@@ -353,7 +387,16 @@ class MemoryConsolidator:
             return None
     
     def get_all_super_memories(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get all super memories for user"""
+        """
+        Get all super memories for user
+        WITH DECRYPTION
+        
+        Args:
+            limit: Maximum number of super memories to return
+            
+        Returns:
+            List of decrypted super memories
+        """
         try:
             query = self.db.collection(self.collection)\
                           .order_by('created_at', direction=firestore.Query.DESCENDING)\
@@ -363,9 +406,14 @@ class MemoryConsolidator:
             for doc in query.stream():
                 memory = doc.to_dict()
                 memory['memory_id'] = doc.id
+                
+                # DECRYPT summary
+                if 'summary' in memory:
+                    memory['summary'] = decrypt_text(memory['summary'])
+                
                 memories.append(memory)
             
-            logger.info(f"📥 Retrieved {len(memories)} super memories")
+            logger.info(f"📥 Retrieved {len(memories)} super memories [decrypted]")
             return memories
             
         except Exception as e:
@@ -373,7 +421,17 @@ class MemoryConsolidator:
             return []
     
     def search_by_theme(self, theme: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search super memories by theme"""
+        """
+        Search super memories by theme
+        WITH DECRYPTION
+        
+        Args:
+            theme: Theme to search for
+            limit: Maximum number of results
+            
+        Returns:
+            List of decrypted super memories
+        """
         try:
             query = self.db.collection(self.collection)\
                           .where('themes', 'array_contains', theme)\
@@ -384,6 +442,11 @@ class MemoryConsolidator:
             for doc in query.stream():
                 memory = doc.to_dict()
                 memory['memory_id'] = doc.id
+                
+                # DECRYPT summary
+                if 'summary' in memory:
+                    memory['summary'] = decrypt_text(memory['summary'])
+                
                 memories.append(memory)
             
             return memories
@@ -404,7 +467,7 @@ class MemoryConsolidator:
                 total += 1
                 memory = doc.to_dict()
                 
-                # Count themes
+                # Count themes (themes are plaintext metadata, no decryption needed)
                 for theme in memory.get('themes', []):
                     themes_count[theme] = themes_count.get(theme, 0) + 1
             
@@ -414,7 +477,8 @@ class MemoryConsolidator:
                     themes_count.items(),
                     key=lambda x: x[1],
                     reverse=True
-                )[:10]
+                )[:10],
+                'encryption': 'enabled'
             }
             
         except Exception as e:

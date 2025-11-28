@@ -95,7 +95,7 @@
                 actionButtons.style.display = 'block';
                 continueBtn.textContent = 'Back to Login';
                 continueBtn.onclick = () => {
-                    window.location.href = '/';
+                    window.location.href = '/frontend/html/login.html';
                 };
             }
         }
@@ -134,10 +134,9 @@
                     </div>
                 `;
                 
-                // Always send to login after verification
                 continueBtn.textContent = 'Sign In';
                 continueBtn.onclick = () => {
-                    window.location.href = '/';
+                    window.location.href = '/frontend/html/login.html';
                 };
                 
                 actionButtons.style.display = 'block';
@@ -149,9 +148,8 @@
         }
         
         async function handlePasswordReset(actionCode) {
-            // Future: Handle password reset
             console.log('🔐 Password reset handler - to be implemented');
-            window.location.href = '/';
+            window.location.href = '/frontend/html/login.html';
         }
     </script>
 </body>
