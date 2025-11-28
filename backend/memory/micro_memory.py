@@ -2,6 +2,7 @@
 """
 Zentrafuge v9 - Micro Memory Storage
 Session summaries with 14-day half-life forgetting curve
+WITH ENCRYPTION AT REST
 """
 
 import logging
@@ -10,12 +11,19 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from firebase_admin import firestore
 
+# Import encryption utilities
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from crypto_handler import encrypt_text, decrypt_text
+
 logger = logging.getLogger(__name__)
 
 
 class MicroMemory:
     """
     Micro memories: Short conversation summaries with forgetting curve
+    WITH ENCRYPTION AT REST
     
     - Created at end of each session
     - Importance decays over 14 days (half-life)
@@ -41,13 +49,14 @@ class MicroMemory:
     ) -> str:
         """
         Create a new micro memory from a conversation session
+        WITH ENCRYPTION
         
         Args:
-            summary: Brief summary of the session
-            messages: List of messages in the session
-            emotional_context: Emotional analysis of the session
-            topics: Topics discussed
-            initial_importance: Starting importance (1-10)
+            summary: Brief summary of the session (will be encrypted)
+            messages: List of messages in the session (content will be encrypted)
+            emotional_context: Emotional analysis (plaintext metadata)
+            topics: Topics discussed (plaintext metadata)
+            initial_importance: Starting importance (1-10, plaintext metadata)
             
         Returns:
             memory_id: ID of created micro memory
@@ -55,20 +64,34 @@ class MicroMemory:
         try:
             timestamp = datetime.utcnow()
             
+            # ENCRYPT summary
+            encrypted_summary = encrypt_text(summary)
+            
+            # ENCRYPT message content
+            encrypted_messages = []
+            for msg in messages[:10]:  # Store up to 10 messages
+                encrypted_msg = {
+                    'role': msg.get('role', 'user'),  # Plaintext metadata
+                    'content': encrypt_text(msg.get('content', '')),  # ENCRYPTED
+                    'timestamp': msg.get('timestamp', '')  # Plaintext metadata
+                }
+                encrypted_messages.append(encrypted_msg)
+            
             micro_memory = {
-                'user_id': self.user_id,
-                'summary': summary,
-                'message_count': len(messages),
-                'messages': messages[:10],  # Store up to 10 messages
-                'emotional_context': emotional_context,
-                'topics': topics,
-                'importance': initial_importance,
-                'initial_importance': initial_importance,
-                'created_at': timestamp.isoformat(),
-                'last_accessed': timestamp.isoformat(),
-                'access_count': 0,
-                'consolidated': False,  # Whether this has been consolidated into super memory
-                'type': 'micro'
+                'user_id': self.user_id,  # Plaintext (for rules)
+                'summary': encrypted_summary,  # ENCRYPTED
+                'message_count': len(messages),  # Plaintext metadata
+                'messages': encrypted_messages,  # ENCRYPTED content
+                'emotional_context': emotional_context,  # Plaintext metadata
+                'topics': topics,  # Plaintext metadata
+                'importance': initial_importance,  # Plaintext metadata
+                'initial_importance': initial_importance,  # Plaintext metadata
+                'created_at': timestamp.isoformat(),  # Plaintext metadata
+                'last_accessed': timestamp.isoformat(),  # Plaintext metadata
+                'access_count': 0,  # Plaintext metadata
+                'consolidated': False,  # Plaintext metadata
+                'type': 'micro',  # Plaintext metadata
+                'schema_version': 1  # Plaintext metadata
             }
             
             # Add to Firestore
@@ -77,7 +100,7 @@ class MicroMemory:
             
             logger.info(
                 f"✅ Created micro memory {memory_id}: {len(messages)} messages, "
-                f"importance={initial_importance:.1f}"
+                f"importance={initial_importance:.1f} [encrypted]"
             )
             
             return memory_id
@@ -87,7 +110,15 @@ class MicroMemory:
             raise
     
     def get_micro_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
-        """Get a specific micro memory by ID"""
+        """
+        Get a specific micro memory by ID (WITH DECRYPTION)
+        
+        Args:
+            memory_id: ID of micro memory
+            
+        Returns:
+            Decrypted micro memory or None
+        """
         try:
             doc_ref = self.db.collection(self.collection).document(memory_id)
             doc = doc_ref.get()
@@ -97,6 +128,22 @@ class MicroMemory:
             
             memory = doc.to_dict()
             memory['memory_id'] = memory_id
+            
+            # DECRYPT summary
+            if 'summary' in memory:
+                memory['summary'] = decrypt_text(memory['summary'])
+            
+            # DECRYPT message content
+            if 'messages' in memory:
+                decrypted_messages = []
+                for msg in memory['messages']:
+                    decrypted_msg = {
+                        'role': msg.get('role', 'user'),
+                        'content': decrypt_text(msg.get('content', '')),  # DECRYPTED
+                        'timestamp': msg.get('timestamp', '')
+                    }
+                    decrypted_messages.append(decrypted_msg)
+                memory['messages'] = decrypted_messages
             
             # Update access tracking
             doc_ref.update({
@@ -118,6 +165,7 @@ class MicroMemory:
     ) -> List[Dict[str, Any]]:
         """
         Get recent micro memories with optional importance decay
+        WITH DECRYPTION
         
         Args:
             limit: Maximum number of memories to return
@@ -125,7 +173,7 @@ class MicroMemory:
             apply_decay: Whether to apply forgetting curve
             
         Returns:
-            List of micro memories sorted by decayed importance
+            List of decrypted micro memories sorted by decayed importance
         """
         try:
             # Query recent memories
@@ -139,6 +187,22 @@ class MicroMemory:
             for doc in query.stream():
                 memory = doc.to_dict()
                 memory['memory_id'] = doc.id
+                
+                # DECRYPT summary
+                if 'summary' in memory:
+                    memory['summary'] = decrypt_text(memory['summary'])
+                
+                # DECRYPT message content
+                if 'messages' in memory:
+                    decrypted_messages = []
+                    for msg in memory['messages']:
+                        decrypted_msg = {
+                            'role': msg.get('role', 'user'),
+                            'content': decrypt_text(msg.get('content', '')),  # DECRYPTED
+                            'timestamp': msg.get('timestamp', '')
+                        }
+                        decrypted_messages.append(decrypted_msg)
+                    memory['messages'] = decrypted_messages
                 
                 if apply_decay:
                     # Calculate current importance with decay
@@ -158,7 +222,7 @@ class MicroMemory:
             
             logger.info(
                 f"📥 Retrieved {len(memories)} micro memories "
-                f"(filtered from query, min_importance={min_importance:.1f})"
+                f"(filtered from query, min_importance={min_importance:.1f}) [decrypted]"
             )
             
             return memories[:limit]
@@ -284,14 +348,14 @@ class MicroMemory:
     
     def search_by_topic(self, topic: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        Search micro memories by topic
+        Search micro memories by topic (WITH DECRYPTION)
         
         Args:
             topic: Topic to search for
             limit: Maximum number of results
             
         Returns:
-            List of matching micro memories
+            List of matching decrypted micro memories
         """
         try:
             query = self.db.collection(self.collection)\
@@ -303,6 +367,10 @@ class MicroMemory:
             for doc in query.stream():
                 memory = doc.to_dict()
                 memory['memory_id'] = doc.id
+                
+                # DECRYPT summary
+                if 'summary' in memory:
+                    memory['summary'] = decrypt_text(memory['summary'])
                 
                 # Calculate current importance
                 memory['current_importance'] = self._calculate_decayed_importance(
@@ -347,7 +415,8 @@ class MicroMemory:
                     topics_count.items(),
                     key=lambda x: x[1],
                     reverse=True
-                )[:10]
+                )[:10],
+                'encryption': 'enabled'
             }
             
         except Exception as e:
