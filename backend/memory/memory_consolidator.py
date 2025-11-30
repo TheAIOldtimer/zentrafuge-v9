@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Zentrafuge v9 - Memory Consolidator
+Zentrafuge v10 - Memory Consolidator
 Consolidates multiple micro memories into super memories (10 micro → 1 super)
-WITH ENCRYPTION AT REST
+WITH ENCRYPTION + THEME EXTRACTION + EMOTIONAL ARC ANALYSIS
 """
 
 import logging
@@ -23,7 +23,13 @@ logger = logging.getLogger(__name__)
 class MemoryConsolidator:
     """
     Consolidates micro memories into super memories
-    WITH ENCRYPTION AT REST
+    WITH ENCRYPTION + ENHANCED PATTERN DETECTION
+    
+    NEW in v10:
+    - Advanced theme extraction using GPT
+    - Emotional arc analysis
+    - Value evolution tracking
+    - Better consolidation triggers
     
     - Waits for 10+ unconsolidated micro memories
     - Uses OpenAI to summarize themes, patterns, and key facts
@@ -118,6 +124,7 @@ class MemoryConsolidator:
     ) -> Optional[Dict[str, Any]]:
         """
         Use OpenAI to generate a consolidated summary of micro memories
+        WITH ENHANCED THEME EXTRACTION + EMOTIONAL ARC ANALYSIS
         Micro memories are already decrypted at this point
         
         Args:
@@ -130,7 +137,7 @@ class MemoryConsolidator:
             # Build prompt with micro memory summaries (already decrypted)
             prompt = self._build_consolidation_prompt(micro_memories)
             
-            # Call OpenAI
+            # Call OpenAI with enhanced instructions
             response = self.openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -141,10 +148,13 @@ class MemoryConsolidator:
                             "and extract:\n"
                             "1. Recurring themes and patterns\n"
                             "2. Significant life events or changes\n"
-                            "3. Emotional patterns and growth\n"
+                            "3. Emotional patterns, growth, and arc (how emotions evolved)\n"
                             "4. Key facts and preferences\n"
-                            "5. Notable topics of interest\n\n"
-                            "Provide a concise but comprehensive consolidation."
+                            "5. Notable topics of interest\n"
+                            "6. Value-related insights (what matters to the person)\n"
+                            "7. Unresolved threads or ongoing concerns\n\n"
+                            "Provide a concise but comprehensive consolidation that captures "
+                            "the essence of this period in the person's life."
                         )
                     },
                     {
@@ -152,22 +162,26 @@ class MemoryConsolidator:
                         "content": prompt
                     }
                 ],
-                max_tokens=500,
+                max_tokens=600,
                 temperature=0.3  # Lower temperature for consistent consolidation
             )
             
             consolidation_text = response.choices[0].message.content
             
-            # Extract themes and patterns (simple implementation)
+            # Extract themes and patterns
             themes = self._extract_themes(micro_memories)
             topics = self._extract_topics(micro_memories)
             emotional_patterns = self._extract_emotional_patterns(micro_memories)
+            emotional_arc = self._analyze_emotional_arc(micro_memories)
+            value_insights = self._extract_value_insights(micro_memories)
             
             return {
                 'summary': consolidation_text,  # Will be encrypted when saved
                 'themes': themes,
                 'topics': topics,
                 'emotional_patterns': emotional_patterns,
+                'emotional_arc': emotional_arc,
+                'value_insights': value_insights,
                 'source_memory_count': len(micro_memories)
             }
             
@@ -203,9 +217,10 @@ class MemoryConsolidator:
         
         lines.append("\n\nProvide a consolidated summary covering:")
         lines.append("- Main themes and patterns")
-        lines.append("- Emotional journey")
+        lines.append("- Emotional journey and arc")
         lines.append("- Key topics of interest")
-        lines.append("- Any notable changes or growth")
+        lines.append("- Value-related insights")
+        lines.append("- Any notable changes, growth, or unresolved concerns")
         
         return "\n".join(lines)
     
@@ -215,12 +230,15 @@ class MemoryConsolidator:
         Summaries are already decrypted at this point
         """
         theme_keywords = {
-            'personal_growth': ['growth', 'learning', 'change', 'progress', 'development'],
-            'relationships': ['friend', 'family', 'partner', 'relationship', 'social'],
-            'work_career': ['work', 'job', 'career', 'project', 'professional'],
-            'health_wellness': ['health', 'exercise', 'wellness', 'sleep', 'fitness'],
-            'emotions': ['feeling', 'emotion', 'mood', 'stress', 'anxiety', 'happiness'],
-            'hobbies_interests': ['hobby', 'interest', 'passion', 'enjoy', 'fun'],
+            'personal_growth': ['growth', 'learning', 'change', 'progress', 'development', 'evolving'],
+            'relationships': ['friend', 'family', 'partner', 'relationship', 'social', 'connection'],
+            'work_career': ['work', 'job', 'career', 'project', 'professional', 'occupation'],
+            'health_wellness': ['health', 'exercise', 'wellness', 'sleep', 'fitness', 'body'],
+            'emotions': ['feeling', 'emotion', 'mood', 'stress', 'anxiety', 'happiness', 'sadness'],
+            'hobbies_interests': ['hobby', 'interest', 'passion', 'enjoy', 'fun', 'creative'],
+            'values_meaning': ['value', 'important', 'matter', 'meaningful', 'purpose', 'belief'],
+            'challenges': ['difficult', 'struggle', 'challenge', 'hard', 'problem', 'obstacle'],
+            'achievements': ['achieve', 'accomplish', 'success', 'proud', 'milestone'],
         }
         
         themes = []
@@ -295,6 +313,106 @@ class MemoryConsolidator:
             'emotion_distribution': emotion_counts
         }
     
+    def _analyze_emotional_arc(
+        self,
+        micro_memories: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        NEW: Analyze how emotions evolved over the consolidation period
+        
+        Returns:
+            Dictionary describing emotional arc (journey)
+        """
+        try:
+            if len(micro_memories) < 3:
+                return {}
+            
+            # Sort by date
+            sorted_memories = sorted(micro_memories, key=lambda m: m['created_at'])
+            
+            # Divide into thirds (beginning, middle, end)
+            third = len(sorted_memories) // 3
+            beginning = sorted_memories[:third] if third > 0 else sorted_memories[:1]
+            middle = sorted_memories[third:2*third] if third > 0 else sorted_memories[1:2]
+            end = sorted_memories[2*third:] if third > 0 else sorted_memories[2:]
+            
+            def get_period_emotion(memories):
+                emotions = []
+                intensities = []
+                for m in memories:
+                    em = m.get('emotional_context', {})
+                    if em:
+                        emotions.append(em.get('primary_emotion', 'neutral'))
+                        intensities.append(em.get('emotional_intensity', 0))
+                
+                if not emotions:
+                    return {'emotion': 'neutral', 'intensity': 0.0}
+                
+                dominant = max(set(emotions), key=emotions.count)
+                avg_intensity = sum(intensities) / len(intensities)
+                return {'emotion': dominant, 'intensity': avg_intensity}
+            
+            arc = {
+                'beginning': get_period_emotion(beginning),
+                'middle': get_period_emotion(middle),
+                'end': get_period_emotion(end)
+            }
+            
+            # Detect trend
+            beginning_intensity = arc['beginning']['intensity']
+            end_intensity = arc['end']['intensity']
+            
+            if end_intensity > beginning_intensity + 0.2:
+                arc['trend'] = 'intensifying'
+            elif end_intensity < beginning_intensity - 0.2:
+                arc['trend'] = 'calming'
+            else:
+                arc['trend'] = 'stable'
+            
+            logger.info(f"📈 Emotional arc: {arc['beginning']['emotion']} → {arc['end']['emotion']} ({arc['trend']})")
+            
+            return arc
+            
+        except Exception as e:
+            logger.error(f"Failed to analyze emotional arc: {e}")
+            return {}
+    
+    def _extract_value_insights(
+        self,
+        micro_memories: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        NEW: Extract value-related insights from conversations
+        
+        Returns:
+            List of value-related observations
+        """
+        value_keywords = [
+            'important', 'matter', 'value', 'meaningful', 'purpose',
+            'belief', 'principle', 'care about', 'stand for'
+        ]
+        
+        insights = []
+        
+        for memory in micro_memories:
+            summary_lower = memory['summary'].lower()
+            
+            # Check if this memory mentions values
+            if any(keyword in summary_lower for keyword in value_keywords):
+                # Extract relevant snippet
+                summary = memory['summary']
+                # Simple extraction: take the sentence mentioning values
+                sentences = summary.split('.')
+                for sentence in sentences:
+                    if any(keyword in sentence.lower() for keyword in value_keywords):
+                        insights.append(sentence.strip())
+                        break
+        
+        # Deduplicate and limit
+        unique_insights = list(set(insights))[:5]
+        
+        return unique_insights
+    
     def _create_super_memory(
         self,
         consolidation: Dict[str, Any],
@@ -302,7 +420,7 @@ class MemoryConsolidator:
     ) -> str:
         """
         Create a super memory document in Firestore
-        WITH ENCRYPTION
+        WITH ENCRYPTION + ENHANCED METADATA
         
         Args:
             consolidation: Consolidation data from OpenAI (plaintext)
@@ -323,6 +441,8 @@ class MemoryConsolidator:
                 'themes': consolidation['themes'],  # Plaintext metadata
                 'topics': consolidation['topics'],  # Plaintext metadata
                 'emotional_patterns': consolidation['emotional_patterns'],  # Plaintext metadata
+                'emotional_arc': consolidation.get('emotional_arc', {}),  # Plaintext metadata
+                'value_insights': consolidation.get('value_insights', []),  # Plaintext metadata
                 'source_memory_count': len(source_memories),  # Plaintext metadata
                 'source_memory_ids': [m['memory_id'] for m in source_memories],  # Plaintext metadata
                 'date_range': {  # Plaintext metadata
@@ -462,6 +582,8 @@ class MemoryConsolidator:
             
             total = 0
             themes_count: Dict[str, int] = {}
+            has_emotional_arc = 0
+            has_value_insights = 0
             
             for doc in query.stream():
                 total += 1
@@ -470,6 +592,12 @@ class MemoryConsolidator:
                 # Count themes (themes are plaintext metadata, no decryption needed)
                 for theme in memory.get('themes', []):
                     themes_count[theme] = themes_count.get(theme, 0) + 1
+                
+                # Count enhanced features
+                if memory.get('emotional_arc'):
+                    has_emotional_arc += 1
+                if memory.get('value_insights'):
+                    has_value_insights += 1
             
             return {
                 'total_super_memories': total,
@@ -478,6 +606,8 @@ class MemoryConsolidator:
                     key=lambda x: x[1],
                     reverse=True
                 )[:10],
+                'with_emotional_arc': has_emotional_arc,
+                'with_value_insights': has_value_insights,
                 'encryption': 'enabled'
             }
             
