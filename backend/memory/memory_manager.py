@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Zentrafuge v9 - Memory Manager
+Zentrafuge v10 - Memory Manager
 Central orchestrator for the multi-tier memory system
-WITH ENCRYPTION AT REST
+WITH ENCRYPTION + ENHANCED RETRIEVAL + VALUES CONTEXT
 """
 
 import logging
@@ -26,13 +26,21 @@ logger = logging.getLogger(__name__)
 
 class MemoryManager:
     """
-    Central memory management system with encryption
+    Central memory management system with encryption + enhanced retrieval
     
     Orchestrates:
     - Persistent facts (never forgotten) - ENCRYPTED
     - Micro memories (session summaries with decay) - ENCRYPTED
     - Super memories (consolidated patterns) - ENCRYPTED
+    - Values context (core beliefs and principles)
+    - Smart retrieval with relevance scoring
     - Automatic consolidation when thresholds reached
+    
+    NEW in v10:
+    - get_values_context() for values-aware conversations
+    - relevance_threshold parameter for smarter retrieval
+    - consolidate_session_memories() with importance boosting
+    - Emotional pattern storage and retrieval
     """
     
     def __init__(
@@ -54,7 +62,7 @@ class MemoryManager:
         self.current_session_messages: List[Dict[str, str]] = []
         self.session_start_time = datetime.utcnow()
         
-        logger.info(f"🧠 Memory Manager initialized for user {user_id} (encryption enabled)")
+        logger.info(f"🧠 Memory Manager v10 initialized for user {user_id} (encryption enabled)")
     
     # =========================================================================
     # PERSISTENT FACTS API
@@ -73,8 +81,74 @@ class MemoryManager:
         return self.facts.get_all_facts()
     
     def import_onboarding(self, onboarding_data: Dict[str, Any]) -> int:
-        """Import facts from onboarding data (will be encrypted)"""
-        return self.facts.import_from_onboarding(onboarding_data)
+        """
+        Import facts from onboarding data (will be encrypted)
+        NOW ALSO IMPORTS VALUES if present in onboarding_data
+        """
+        count = self.facts.import_from_onboarding(onboarding_data)
+        
+        # Import values if present
+        if 'core_values' in onboarding_data:
+            values = onboarding_data['core_values']
+            if isinstance(values, list):
+                self.facts.set_fact('values', 'core_values', values, 'onboarding')
+                count += 1
+        
+        # Import value definitions if present
+        if 'value_definitions' in onboarding_data:
+            definitions = onboarding_data['value_definitions']
+            if isinstance(definitions, dict):
+                self.facts.set_fact('values', 'value_definitions', definitions, 'onboarding')
+                count += 1
+        
+        return count
+    
+    # =========================================================================
+    # VALUES CONTEXT (NEW!)
+    # =========================================================================
+    
+    def get_values_context(self) -> str:
+        """
+        Get natural language summary of user's core values
+        
+        Returns:
+            Formatted string describing user's values and what they mean in practice
+        """
+        try:
+            core_values = self.facts.get_fact('values', 'core_values')
+            value_definitions = self.facts.get_fact('values', 'value_definitions')
+            
+            if not core_values:
+                return ""
+            
+            lines = ["=== USER'S CORE VALUES ==="]
+            
+            if isinstance(core_values, list):
+                lines.append(f"\nCore values: {', '.join(core_values)}")
+                
+                # Add definitions if available
+                if isinstance(value_definitions, dict):
+                    lines.append("\nWhat these values mean in practice:")
+                    for value in core_values:
+                        if value in value_definitions:
+                            definition = value_definitions[value]
+                            lines.append(f"  • {value.capitalize()}: {definition}")
+            
+            # Add sources of meaning if available
+            sources_of_meaning = self.facts.get_fact('values', 'sources_of_meaning')
+            if sources_of_meaning:
+                lines.append(f"\nSources of meaning: {', '.join(sources_of_meaning)}")
+            
+            # Add life chapter context if available
+            life_chapter = self.facts.get_fact('values', 'life_chapter')
+            if life_chapter:
+                lines.append(f"\nCurrent life chapter: {life_chapter}")
+            
+            return "\n".join(lines)
+            
+        except Exception as e:
+            logger.error(f"Failed to get values context: {e}")
+            return ""
     
     # =========================================================================
     # SESSION MANAGEMENT
@@ -153,6 +227,48 @@ class MemoryManager:
             logger.error(f"❌ Failed to end session: {e}")
             return None
     
+    async def consolidate_session_memories(self, importance_boost: float = 0.0) -> Optional[str]:
+        """
+        NEW: Manually trigger memory consolidation with optional importance boost
+        
+        Args:
+            importance_boost: Additional importance to add (e.g., 0.3 for emotionally significant moments)
+            
+        Returns:
+            super_memory_id or None
+        """
+        try:
+            logger.info(f"🔄 Manual consolidation triggered (boost={importance_boost})")
+            
+            # Get unconsolidated memories
+            memories = self.micro.get_recent_micro_memories(
+                limit=self.consolidator.CONSOLIDATION_THRESHOLD,
+                min_importance=2.0,
+                apply_decay=False
+            )
+            
+            if not memories:
+                logger.info("No memories to consolidate")
+                return None
+            
+            # Apply importance boost if specified
+            if importance_boost > 0:
+                for memory in memories:
+                    # Update importance in Firestore
+                    self.micro.boost_importance(
+                        memory['memory_id'],
+                        importance_boost
+                    )
+            
+            # Run consolidation
+            super_memory_id = await self.consolidator.consolidate_memories(self.micro)
+            
+            return super_memory_id
+            
+        except Exception as e:
+            logger.error(f"Failed to consolidate session memories: {e}")
+            return None
+    
     async def _generate_session_summary(self) -> str:
         """Generate a summary of the current session using OpenAI"""
         try:
@@ -204,13 +320,13 @@ class MemoryManager:
                 content_lower = msg['content'].lower()
                 
                 # Check for emotional keywords
-                if any(word in content_lower for word in ['sad', 'upset', 'depressed']):
+                if any(word in content_lower for word in ['sad', 'upset', 'depressed', 'down']):
                     emotions.append('negative')
                     intensities.append(0.7)
-                elif any(word in content_lower for word in ['happy', 'great', 'excited']):
+                elif any(word in content_lower for word in ['happy', 'great', 'excited', 'wonderful']):
                     emotions.append('positive')
                     intensities.append(0.6)
-                elif any(word in content_lower for word in ['worried', 'anxious', 'nervous']):
+                elif any(word in content_lower for word in ['worried', 'anxious', 'nervous', 'scared']):
                     emotions.append('anxious')
                     intensities.append(0.7)
         
@@ -246,7 +362,8 @@ class MemoryManager:
             'hobbies': ['hobby', 'game', 'movie', 'book', 'music', 'sport'],
             'emotions': ['feel', 'emotion', 'mood', 'anxiety', 'depression'],
             'pets': ['dog', 'cat', 'pet', 'animal'],
-            'goals': ['goal', 'plan', 'dream', 'ambition', 'aspiration']
+            'goals': ['goal', 'plan', 'dream', 'ambition', 'aspiration'],
+            'values': ['value', 'important', 'matter', 'meaningful', 'purpose']
         }
         
         for topic, keywords in topic_map.items():
@@ -266,6 +383,10 @@ class MemoryManager:
         # Emotional sessions are more important
         if emotional_context['emotional_intensity'] > 0.5:
             importance += 2.0
+        
+        # Values discussions are highly important
+        if 'values' in topics:
+            importance += 1.5
         
         # More topics = more important
         importance += min(len(topics) * 0.5, 2.0)
@@ -290,16 +411,22 @@ class MemoryManager:
             logger.error(f"❌ Failed to extract facts from session: {e}")
     
     # =========================================================================
-    # MEMORY RETRIEVAL FOR AI CONTEXT (WITH DECRYPTION)
+    # ENHANCED MEMORY RETRIEVAL (WITH RELEVANCE + DECRYPTION)
     # =========================================================================
     
-    def get_context_for_prompt(self, max_micro_memories: int = 5) -> str:
+    def get_context_for_prompt(
+        self,
+        max_micro_memories: int = 5,
+        relevance_threshold: float = 0.0
+    ) -> str:
         """
-        Get formatted memory context for AI prompts
+        Get formatted memory context for AI prompts with smart retrieval
         All encrypted data is decrypted before returning
         
         Args:
             max_micro_memories: Maximum number of recent micro memories to include
+            relevance_threshold: Minimum relevance score (0.0-1.0) for retrieval
+                                0.0 = all memories, 0.6 = only relevant ones
             
         Returns:
             Formatted string with all relevant context (decrypted)
@@ -312,18 +439,18 @@ class MemoryManager:
             lines.append(facts_text)
             lines.append("")
             
-            # 2. Recent Micro Memories (with decay) - DECRYPTED
+            # 2. Recent Micro Memories (with decay + relevance) - DECRYPTED
             recent_micros = self.micro.get_recent_micro_memories(
                 limit=max_micro_memories,
-                min_importance=2.0,
+                min_importance=max(2.0, relevance_threshold * 10),  # Convert threshold to importance
                 apply_decay=True
             )
             
             if recent_micros:
                 lines.append("=== RECENT CONVERSATIONS ===")
                 for memory in recent_micros:
-                    # Decrypt summary
-                    summary = decrypt_text(memory.get('summary', ''))
+                    # Decrypt summary (already done by micro.get_recent_micro_memories)
+                    summary = memory.get('summary', '')
                     
                     lines.append(f"\nDate: {memory['created_at'][:10]}")
                     lines.append(f"Summary: {summary}")
@@ -331,6 +458,14 @@ class MemoryManager:
                         f"Importance: {memory['current_importance']:.1f}/10 "
                         f"(decaying from {memory['importance']:.1f})"
                     )
+                    
+                    # Add emotional context if significant
+                    emotional = memory.get('emotional_context', {})
+                    if emotional.get('emotional_intensity', 0) > 0.5:
+                        lines.append(
+                            f"Emotion: {emotional.get('primary_emotion', 'unknown')} "
+                            f"(intensity: {emotional.get('emotional_intensity', 0):.1f})"
+                        )
                 lines.append("")
             
             # 3. Super Memories (Long-term patterns) - DECRYPTED
@@ -339,13 +474,20 @@ class MemoryManager:
             if super_memories:
                 lines.append("=== LONG-TERM PATTERNS ===")
                 for memory in super_memories:
-                    # Decrypt summary
-                    summary = decrypt_text(memory.get('summary', ''))
+                    # Decrypt summary (already done by consolidator.get_all_super_memories)
+                    summary = memory.get('summary', '')
                     
                     lines.append(f"\nPeriod: {memory['date_range']['start'][:10]} to {memory['date_range']['end'][:10]}")
                     lines.append(f"Summary: {summary}")
                     if memory.get('themes'):
                         lines.append(f"Themes: {', '.join(memory['themes'])}")
+                    
+                    # Add emotional patterns if available
+                    emotional_patterns = memory.get('emotional_patterns', {})
+                    if emotional_patterns:
+                        dominant = emotional_patterns.get('dominant_emotion')
+                        if dominant:
+                            lines.append(f"Emotional pattern: {dominant}")
                 lines.append("")
             
             return "\n".join(lines)
@@ -354,6 +496,44 @@ class MemoryManager:
             logger.error(f"❌ Failed to get context for prompt: {e}")
             return "No memory context available."
     
+    def get_recent_open_thread(self) -> Optional[Dict[str, Any]]:
+        """
+        NEW: Get one recent topic that seems unfinished or important
+        for proactive follow-up
+        
+        Returns:
+            Dictionary with 'summary' and 'topic' keys, or None
+        """
+        try:
+            # Get recent micro memories
+            recent = self.micro.get_recent_micro_memories(
+                limit=10,
+                min_importance=4.0,
+                apply_decay=True
+            )
+            
+            # Look for memories with high importance or emotional intensity
+            for memory in recent:
+                emotional = memory.get('emotional_context', {})
+                current_importance = memory.get('current_importance', 0)
+                
+                # High importance or high emotion = potential open thread
+                if current_importance > 6.0 or emotional.get('emotional_intensity', 0) > 0.6:
+                    topics = memory.get('topics', [])
+                    main_topic = topics[0] if topics else "recent conversation"
+                    
+                    return {
+                        'summary': memory.get('summary', ''),
+                        'topic': main_topic,
+                        'date': memory.get('created_at', '')[:10]
+                    }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get recent open thread: {e}")
+            return None
+    
     # =========================================================================
     # STATISTICS & DEBUGGING
     # =========================================================================
@@ -361,9 +541,11 @@ class MemoryManager:
     def get_memory_stats(self) -> Dict[str, Any]:
         """Get comprehensive memory statistics"""
         try:
+            micro_stats = self.micro.get_stats()
+            
             return {
                 'persistent_facts': self.facts.get_stats(),
-                'micro_memories': self.micro.get_stats(),
+                'micro_memories': micro_stats,
                 'super_memories': self.consolidator.get_stats(),
                 'current_session': {
                     'message_count': len(self.current_session_messages),
@@ -371,6 +553,7 @@ class MemoryManager:
                         datetime.utcnow() - self.session_start_time
                     ).total_seconds() / 60
                 },
+                'recent_micro_count': micro_stats.get('unconsolidated', 0),
                 'encryption': 'enabled'
             }
         except Exception as e:
