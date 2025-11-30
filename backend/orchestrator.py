@@ -7,7 +7,7 @@ Key Enhancements:
 - Advanced emotion detection with pattern tracking
 - Smart memory consolidation and retrieval
 - Proactive engagement with timing intelligence
-- Multi-level crisis intervention
+- BULLETPROOF multi-level crisis intervention
 - Adaptive personalization engine
 - Performance monitoring and cost optimization
 - Improved error recovery
@@ -1137,40 +1137,74 @@ RESPONSE GUIDELINES:
         prompt_data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Generate crisis-mode response with maximum safety focus
+        Generate DIRECT, IMMEDIATE crisis response
+        
+        This is the most important response in the entire system.
         """
         try:
             risk_level = safety_assessment.get("risk_level", "medium")
-            intervention_type = safety_assessment.get("intervention_type", "gentle_check_in")
-
+            intervention_type = safety_assessment.get("intervention_type", "crisis_response")
+            specific_triggers = safety_assessment.get("specific_triggers", [])
+            
+            # Get user's name if we know it
+            user_name = self.memory.get_fact('identity', 'name')
+            name_address = f"{user_name}, " if user_name else ""
+            
+            # Get important relationships if we know them
+            spouse = self.memory.get_fact('relationships', 'wife') or \
+                     self.memory.get_fact('relationships', 'husband') or \
+                     self.memory.get_fact('relationships', 'partner')
+            
             crisis_system_prompt = f"""
 {self.being_code}
 
-CRISIS RESPONSE MODE ACTIVE
+🚨 CRISIS RESPONSE MODE - MAXIMUM PRIORITY 🚨
+
 Risk Level: {risk_level}
 Intervention Type: {intervention_type}
+Triggers Detected: {', '.join(specific_triggers)}
 
-CRITICAL PRIORITIES:
-1. Emotional safety is the ONLY priority right now
-2. Acknowledge their pain directly and without minimizing
-3. Stay calm, grounded, and present
-4. Validate that what they're feeling matters
-5. Gently encourage immediate connection with support:
-   - Trusted friend or family member
-   - Mental health professional
-   - Crisis hotline (988 in US, appropriate local number)
-   - Emergency services if in immediate danger
+CRITICAL INSTRUCTIONS:
+This person is at risk of suicide or self-harm. Your response must be:
 
-RESPONSE APPROACH:
-- Keep response focused and clear (2-4 paragraphs)
-- Do NOT provide instructions for self-harm
-- Do NOT say things will "get better" or minimize their pain
-- DO acknowledge the weight of what they're carrying
-- DO remind them they don't have to face this alone
-- DO encourage professional support
-- Ask one gentle question to keep connection, but don't interrogate
+1. DIRECT AND URGENT
+   - Say "I'm very concerned about your safety right now"
+   - Use their name if you know it: {user_name or "[name unknown]"}
+   - Acknowledge the specific pain they expressed
 
-TONE: Calm, compassionate, present, honest about your limitations
+2. IMMEDIATE ACTION REQUIRED
+   - Tell them to reach out RIGHT NOW (not "consider" or "you might")
+   - Specific people: {spouse or "a trusted person in your life"}
+   - Crisis services: 988 (US), 116 123 (UK Samaritans), or local emergency
+   - If immediate danger: Emergency services (999 in UK, 911 in US)
+
+3. VALIDATE WITHOUT MINIMIZING
+   - Acknowledge their pain is real and overwhelming
+   - DO NOT say "things will get better" or "it's not that bad"
+   - DO say "what you're feeling matters" and "this pain can change"
+
+4. CREATE CONNECTION
+   - Mention specific people who care about them if you know them
+   - Remind them they don't have to face this alone
+   - Ask them to stay safe for the next few minutes/hours
+
+5. TONE AND LENGTH
+   - Be calm but urgent
+   - 3-4 short paragraphs maximum
+   - One clear question: "Can you reach out to someone right now?"
+   - No lists, no options - just direct guidance
+
+FORBIDDEN:
+- Do NOT be vague or indirect
+- Do NOT say "I understand" (you're an AI)
+- Do NOT give generic platitudes
+- Do NOT overwhelm with information
+- Do NOT ask multiple questions
+
+User's important relationship: {spouse or "Unknown - but someone must care about them"}
+User is veteran: {self.is_veteran}
+
+NOW RESPOND WITH MAXIMUM CARE AND DIRECTNESS:
             """.strip()
 
             messages = [
@@ -1181,12 +1215,19 @@ TONE: Calm, compassionate, present, honest about your limitations
             response = self.openai_client.chat.completions.create(
                 model=self.model_config["emergency"],
                 messages=messages,
-                max_tokens=self.model_config["max_tokens_crisis"],
-                temperature=self.model_config["temperature_crisis"],
+                max_tokens=400,
+                temperature=0.5,
+            )
+
+            crisis_content = response.choices[0].message.content
+            
+            logger.critical(
+                f"🚨 Generated crisis response for {self.user_id} "
+                f"(risk: {risk_level}, triggers: {len(specific_triggers)})"
             )
 
             return {
-                "content": response.choices[0].message.content,
+                "content": crisis_content,
                 "model_used": self.model_config["emergency"],
                 "tokens_used": response.usage.total_tokens,
                 "success": True,
@@ -1196,28 +1237,31 @@ TONE: Calm, compassionate, present, honest about your limitations
             }
 
         except Exception as e:
-            logger.error(f"Crisis response generation failed: {e}")
-            # Fallback to safe, generic crisis message
+            logger.error(f"Crisis response generation FAILED: {e}")
+            
+            # CRITICAL FALLBACK
             fallback_messages = {
-                "high": (
-                    "I can hear that you're in a lot of pain right now, and I'm really concerned "
-                    "about your safety. I care about you, and I need you to know that you don't have "
-                    "to face this alone. Please reach out right now to someone who can be there with you—"
-                    "a trusted person in your life, or call 988 (the suicide and crisis lifeline). "
-                    "They're available 24/7. Will you do that for me?"
+                "critical": (
+                    f"{name_address}I'm very concerned about your safety right now. "
+                    f"What you're saying tells me you're in serious pain, and I need you to know "
+                    f"that you don't have to face this alone. "
+                    f"{f'Please reach out to {spouse} or ' if spouse else 'Please reach out to '}"
+                    f"call 988 (suicide & crisis lifeline) or 999 if you're in immediate danger. "
+                    f"Can you do that for me right now? Your life has value, even when it doesn't feel like it."
                 ),
-                "medium": (
-                    "It sounds like you're carrying something really heavy, and I'm glad you're talking "
-                    "about it. I care about your wellbeing. If you're thinking about hurting yourself, "
-                    "please reach out to a counselor, trusted friend, or call 988. You deserve support "
-                    "right now. How are you feeling about reaching out to someone?"
+                "high": (
+                    f"{name_address}I'm really concerned about what you're sharing with me. "
+                    f"These thoughts about ending your life are serious, and you deserve support right now. "
+                    f"{f'{spouse} cares about you - can you reach out to them? Or ' if spouse else ''}"
+                    f"Please call 988 or speak with someone you trust. You don't have to go through this alone. "
+                    f"Will you reach out to someone today?"
                 ),
             }
             
             fallback = fallback_messages.get(
                 risk_level,
-                "I'm here with you, and I care about your safety. If you're in crisis, "
-                "please reach out to 988 or a trusted person. You don't have to go through this alone."
+                f"{name_address}I'm concerned about your wellbeing. If you're thinking about harming yourself, "
+                f"please reach out to 988 or a trusted person right now. You matter, and help is available."
             )
             
             return {
@@ -1315,7 +1359,7 @@ FOLLOW-UP MODE:
         # Check for crisis response appropriateness
         if safety_assessment.get("risk_level") in ["high", "critical"]:
             # Must contain safety/support language
-            safety_terms = ["support", "help", "crisis", "988", "professional", "safe"]
+            safety_terms = ["support", "help", "crisis", "988", "professional", "safe", "reach out"]
             if not any(term in content.lower() for term in safety_terms):
                 issues.append("crisis_response_missing_safety")
                 acceptable = False
@@ -1449,6 +1493,7 @@ FOLLOW-UP MODE:
         return {
             "suicide_prevention": {
                 "us": "988",
+                "uk": "116 123 (Samaritans)",
                 "text": "Text 'HELLO' to 741741",
                 "international": "https://findahelpline.com"
             },
@@ -1456,7 +1501,7 @@ FOLLOW-UP MODE:
                 "crisis_line": "988 (Press 1)",
                 "text": "838255"
             } if self.is_veteran else None,
-            "emergency": "911 (US) or local emergency services"
+            "emergency": "999 (UK) / 911 (US) or local emergency services"
         }
 
     # ========================================================================
@@ -1660,7 +1705,6 @@ Generate a warm, genuine greeting now.
             # Save emotional history summary
             if self.emotion_tracker.has_data():
                 emotional_summary = self.emotion_tracker.get_session_summary()
-                # Could save this to Firestore if needed
                 logger.info(f"Emotional session summary: {emotional_summary}")
             
             # Save personalization updates
@@ -1735,7 +1779,7 @@ class EmotionTracker:
     
     def __init__(self, user_id: str):
         self.user_id = user_id
-        self.emotion_history: deque = deque(maxlen=50)  # Last 50 emotional snapshots
+        self.emotion_history: deque = deque(maxlen=50)
         self.session_emotions: List[Dict[str, Any]] = []
         
     def record_emotion(self, emotional_analysis: Dict[str, Any]):
@@ -1761,14 +1805,12 @@ class EmotionTracker:
         
         recent = list(self.emotion_history)[-10:]
         
-        # Analyze patterns
         emotions = [e["primary_emotion"] for e in recent]
         intensities = [e["intensity"] for e in recent]
         
         avg_intensity = sum(intensities) / len(intensities)
         dominant_emotion = max(set(emotions), key=emotions.count)
         
-        # Detect trends
         if len(intensities) >= 5:
             recent_avg = sum(intensities[-3:]) / 3
             earlier_avg = sum(intensities[-6:-3]) / 3
@@ -1834,33 +1876,87 @@ This helps you understand where they've been emotionally, not just this moment.
 
 class EnhancedSafetyMonitor:
     """
-    Multi-level safety monitoring with graduated intervention
+    BULLETPROOF multi-level safety monitoring with comprehensive crisis detection
+    
+    CRITICAL: This is the most important safety feature
     """
     
     def __init__(self, user_id: str):
         self.user_id = user_id
         self.safety_history: deque = deque(maxlen=20)
         
-        # Graduated keyword sets
+        # =====================================================================
+        # CRITICAL KEYWORDS (Immediate danger)
+        # =====================================================================
         self.critical_keywords = [
+            # Direct statements
             "kill myself", "end my life", "suicide", "want to die",
-            "better off dead", "going to kill", "plan to die"
+            "going to kill myself", "plan to die", "planning to die",
+            "going to end it", "end it all tonight", "end it all today",
+            
+            # UK/Informal expressions
+            "snuff myself", "do myself in", "top myself", "off myself",
+            "end it", "finish it", "done with life",
+            
+            # Method mentions
+            "jump off", "overdose", "pills and", "cut my wrists",
+            "hang myself", "hanging myself",
+            
+            # Finality statements
+            "goodbye forever", "last time", "won't be here tomorrow",
+            "this is it", "final message", "saying goodbye",
         ]
         
+        # =====================================================================
+        # HIGH RISK KEYWORDS (Serious ideation)
+        # =====================================================================
         self.high_risk_keywords = [
             "don't want to live", "can't go on", "no reason to live",
-            "end it all", "give up", "no point", "hurt myself badly"
+            "better off dead", "world better without me",
+            "shouldn't be here", "wish I was dead", "wish I wasn't here",
+            "don't want to be here anymore", "can't do this anymore",
+            "too much to bear", "can't take it anymore",
+            
+            # UK expressions
+            "rather be dead", "had enough of life", "done with it all",
+            "can't cope", "end of my tether", "at the end",
+            
+            # Burden statements
+            "burden on everyone", "burden to", "everyone better off",
+            "tired of being a burden", "they'd be better without me",
         ]
         
+        # =====================================================================
+        # MEDIUM RISK KEYWORDS (Self-harm or distress)
+        # =====================================================================
         self.medium_risk_keywords = [
-            "hurt myself", "self harm", "cut myself", "harm myself",
-            "hate myself", "worthless", "burden", "hopeless"
+            "hurt myself", "harm myself", "cut myself", "cutting myself",
+            "burn myself", "punish myself", "self harm", "self-harm",
+            "hate myself", "worthless", "piece of shit", "waste of space",
+            "hopeless", "no hope", "give up", "giving up",
+            "pointless", "no point", "what's the point",
+            "can't see a way out", "trapped", "no escape", "no future",
+            "nothing left", "empty inside", "numb", "dead inside",
         ]
         
+        # =====================================================================
+        # LOW RISK KEYWORDS (Ideation without plan)
+        # =====================================================================
         self.ideation_keywords = [
             "wish i was dead", "wish i wasn't here", "shouldn't exist",
-            "world better without me"
+            "world better without me", "disappear", "fade away",
+            "stop existing", "not be here", "be gone",
         ]
+        
+        # =====================================================================
+        # CONTEXT MULTIPLIERS
+        # =====================================================================
+        self.risk_multipliers = {
+            "substances": ["drunk", "drinking", "high", "pills", "alcohol", "drugs"],
+            "isolation": ["alone", "no one", "nobody", "by myself", "isolated"],
+            "finality": ["goodbye", "last", "final", "forever", "never again"],
+            "means": ["gun", "pills", "bridge", "rope", "blade", "knife"],
+        }
     
     def assess_safety(
         self,
@@ -1869,86 +1965,188 @@ class EnhancedSafetyMonitor:
         emotional_history: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Comprehensive safety assessment with graduated response
+        Comprehensive safety assessment with context-aware detection
         """
         try:
             text = message.lower()
             intensity = emotional_context.get("emotional_intensity", 0)
             
-            # Check keyword categories
-            critical_match = any(kw in text for kw in self.critical_keywords)
-            high_risk_match = any(kw in text for kw in self.high_risk_keywords)
-            medium_risk_match = any(kw in text for kw in self.medium_risk_keywords)
-            ideation_match = any(kw in text for kw in self.ideation_keywords)
-            
-            # Determine risk level
             risk_level = RiskLevel.NONE
             safety_concerns = []
+            specific_triggers = []
+            risk_score = 0.0
             
-            if critical_match:
-                risk_level = RiskLevel.CRITICAL
-                safety_concerns.append("immediate_suicide_risk")
-            elif high_risk_match:
-                risk_level = RiskLevel.HIGH
-                safety_concerns.append("high_suicide_risk")
-            elif medium_risk_match:
-                risk_level = RiskLevel.MEDIUM
-                safety_concerns.append("self_harm_risk")
-            elif ideation_match:
-                risk_level = RiskLevel.LOW
-                safety_concerns.append("suicidal_ideation")
+            # ================================================================
+            # PHASE 1: Direct keyword matching
+            # ================================================================
             
-            # Escalate based on emotional intensity
-            if risk_level in [RiskLevel.HIGH, RiskLevel.MEDIUM] and intensity > 0.8:
-                risk_level = RiskLevel.CRITICAL
+            # CRITICAL keywords
+            for keyword in self.critical_keywords:
+                if keyword in text:
+                    risk_level = RiskLevel.CRITICAL
+                    safety_concerns.append("immediate_suicide_risk")
+                    specific_triggers.append(f"critical: '{keyword}'")
+                    risk_score += 10.0
+                    logger.critical(f"🚨 CRITICAL SAFETY ALERT: User {self.user_id} used phrase '{keyword}'")
+                    break
             
-            # Check emotional history for patterns
+            # HIGH RISK keywords
+            if risk_level != RiskLevel.CRITICAL:
+                for keyword in self.high_risk_keywords:
+                    if keyword in text:
+                        risk_level = RiskLevel.HIGH
+                        safety_concerns.append("high_suicide_risk")
+                        specific_triggers.append(f"high: '{keyword}'")
+                        risk_score += 7.0
+                        logger.error(f"⚠️ HIGH RISK ALERT: User {self.user_id} used phrase '{keyword}'")
+                        break
+            
+            # MEDIUM RISK keywords
+            if risk_level not in [RiskLevel.CRITICAL, RiskLevel.HIGH]:
+                for keyword in self.medium_risk_keywords:
+                    if keyword in text:
+                        risk_level = RiskLevel.MEDIUM
+                        safety_concerns.append("self_harm_risk")
+                        specific_triggers.append(f"medium: '{keyword}'")
+                        risk_score += 5.0
+                        logger.warning(f"⚠️ MEDIUM RISK: User {self.user_id} used phrase '{keyword}'")
+                        break
+            
+            # LOW RISK (ideation)
+            if risk_level == RiskLevel.NONE:
+                for keyword in self.ideation_keywords:
+                    if keyword in text:
+                        risk_level = RiskLevel.LOW
+                        safety_concerns.append("suicidal_ideation")
+                        specific_triggers.append(f"ideation: '{keyword}'")
+                        risk_score += 3.0
+                        logger.info(f"ℹ️ LOW RISK: User {self.user_id} - ideation detected")
+                        break
+            
+            # ================================================================
+            # PHASE 2: Context multipliers (escalate risk)
+            # ================================================================
+            
+            multiplier_found = False
+            for category, keywords in self.risk_multipliers.items():
+                if any(kw in text for kw in keywords):
+                    multiplier_found = True
+                    specific_triggers.append(f"multiplier: {category}")
+                    risk_score += 2.0
+                    
+                    if risk_level == RiskLevel.MEDIUM:
+                        risk_level = RiskLevel.HIGH
+                        logger.warning(f"⬆️ Risk escalated to HIGH due to {category}")
+                    elif risk_level == RiskLevel.HIGH:
+                        risk_level = RiskLevel.CRITICAL
+                        logger.critical(f"⬆️ Risk escalated to CRITICAL due to {category}")
+            
+            # ================================================================
+            # PHASE 3: Emotional intensity amplification
+            # ================================================================
+            
+            if intensity > 0.8:
+                risk_score += 2.0
+                specific_triggers.append(f"high_emotional_intensity: {intensity:.2f}")
+                
+                if risk_level == RiskLevel.MEDIUM and intensity > 0.8:
+                    risk_level = RiskLevel.HIGH
+                    logger.warning(f"⬆️ Risk escalated to HIGH due to emotional intensity")
+                elif risk_level == RiskLevel.HIGH and intensity > 0.9:
+                    risk_level = RiskLevel.CRITICAL
+                    logger.critical(f"⬆️ Risk escalated to CRITICAL due to extreme emotional intensity")
+            
+            # ================================================================
+            # PHASE 4: Pattern detection from history
+            # ================================================================
+            
             if emotional_history and len(emotional_history) >= 3:
                 recent_states = [e.get("state") for e in emotional_history[-3:]]
-                if recent_states.count("depressed") >= 2 and risk_level == RiskLevel.MEDIUM:
-                    risk_level = RiskLevel.HIGH
+                
+                if recent_states.count("depressed") >= 2:
                     safety_concerns.append("persistent_depression_pattern")
+                    specific_triggers.append("pattern: persistent depression")
+                    
+                    if risk_level == RiskLevel.MEDIUM:
+                        risk_level = RiskLevel.HIGH
+                        logger.warning(f"⬆️ Risk escalated to HIGH due to depression pattern")
+                
+                if "anxious" in recent_states[:2] and recent_states[-1] == "depressed":
+                    specific_triggers.append("pattern: anxiety to depression shift")
+                    risk_score += 1.0
             
-            # Determine intervention type
-            intervention_type = self._select_intervention_type(risk_level, safety_concerns)
+            # ================================================================
+            # PHASE 5: Determine intervention type
+            # ================================================================
+            
+            intervention_type = self._select_intervention_type(
+                risk_level, 
+                safety_concerns,
+                multiplier_found
+            )
+            
+            # ================================================================
+            # PHASE 6: Build comprehensive assessment
+            # ================================================================
+            
+            assessment = {
+                "risk_level": risk_level.value,
+                "risk_score": risk_score,
+                "safety_concerns": safety_concerns,
+                "specific_triggers": specific_triggers,
+                "intervention_type": intervention_type.value,
+                "requires_intervention": risk_level in [RiskLevel.CRITICAL, RiskLevel.HIGH],
+                "requires_followup": risk_level in [RiskLevel.MEDIUM, RiskLevel.LOW],
+                "emergency_contact_suggested": risk_level == RiskLevel.CRITICAL,
+                "emotional_intensity": intensity,
+                "context_multipliers_present": multiplier_found,
+            }
             
             # Record in history
             self.safety_history.append({
                 "timestamp": datetime.utcnow(),
                 "risk_level": risk_level.value,
                 "concerns": safety_concerns,
-                "intervention_type": intervention_type.value
+                "triggers": specific_triggers
             })
             
-            return {
-                "risk_level": risk_level.value,
-                "safety_concerns": safety_concerns,
-                "intervention_type": intervention_type.value,
-                "requires_intervention": risk_level in [RiskLevel.CRITICAL, RiskLevel.HIGH],
-                "requires_followup": risk_level in [RiskLevel.MEDIUM, RiskLevel.LOW],
-                "emotional_intensity": intensity,
-            }
+            # Log summary
+            if risk_level != RiskLevel.NONE:
+                logger.warning(
+                    f"🚨 Safety Assessment for {self.user_id}: "
+                    f"Risk={risk_level.value}, "
+                    f"Score={risk_score:.1f}, "
+                    f"Triggers={len(specific_triggers)}"
+                )
+            
+            return assessment
             
         except Exception as e:
             logger.error(f"Safety assessment failed: {e}")
+            # FAIL SAFE: If assessment fails, assume risk
             return {
-                "risk_level": RiskLevel.NONE.value,
-                "safety_concerns": [],
-                "intervention_type": InterventionType.NONE.value,
-                "requires_intervention": False,
-                "requires_followup": False,
+                "risk_level": RiskLevel.HIGH.value,
+                "safety_concerns": ["assessment_error"],
+                "intervention_type": InterventionType.CRISIS_RESPONSE.value,
+                "requires_intervention": True,
+                "requires_followup": True,
+                "emergency_contact_suggested": True,
+                "error": str(e)
             }
     
     def _select_intervention_type(
         self,
         risk_level: RiskLevel,
-        concerns: List[str]
+        concerns: List[str],
+        has_multipliers: bool
     ) -> InterventionType:
-        """Select appropriate intervention type"""
+        """Select appropriate intervention based on risk assessment"""
         
         if risk_level == RiskLevel.CRITICAL:
             return InterventionType.EMERGENCY_RESOURCES
         elif risk_level == RiskLevel.HIGH:
+            if has_multipliers:
+                return InterventionType.EMERGENCY_RESOURCES
             return InterventionType.CRISIS_RESPONSE
         elif risk_level == RiskLevel.MEDIUM:
             return InterventionType.DIRECT_CONCERN
@@ -1975,17 +2173,14 @@ class ProactiveEngagementEngine:
     ) -> bool:
         """Determine if this is a good moment for proactive engagement"""
         
-        # Don't be proactive too frequently
         if self.last_proactive_time:
             time_since = datetime.utcnow() - self.last_proactive_time
-            if time_since.total_seconds() < 300:  # 5 minutes
+            if time_since.total_seconds() < 300:
                 return False
         
-        # Don't be proactive during high emotion or crisis
         if emotional_context.get("emotional_intensity", 0) > 0.7:
             return False
         
-        # Good moment for proactivity: calm, neutral, some conversation history
         if len(conversation_history) >= 3 and \
            emotional_context.get("emotional_state") in ["neutral", "positive"]:
             return True
@@ -1998,11 +2193,6 @@ class ProactiveEngagementEngine:
         emotional_context: Dict[str, Any]
     ) -> str:
         """Get suggestions for proactive conversation topics"""
-        
-        # This would ideally query memory for:
-        # - Topics mentioned but not fully explored
-        # - Values that could be checked in on
-        # - Past concerns worth following up on
         
         suggestions = """
 You may gently bring up one relevant topic from memory if it feels natural and caring.
@@ -2025,7 +2215,6 @@ Only do this if it flows naturally. Never force it.
         if not self.followup_opportunities:
             return ""
         
-        # Return most recent opportunity
         opp = self.followup_opportunities[-1]
         return f"Consider gently checking in about: {opp.get('topic', 'their recent sharing')}"
 
@@ -2038,10 +2227,10 @@ class PersonalizationEngine:
     def __init__(self, user_id: str):
         self.user_id = user_id
         self.preferences: Dict[str, Any] = {
-            "communication_style": "balanced",  # brief, balanced, detailed
+            "communication_style": "balanced",
             "prefers_questions": True,
             "prefers_proactive": True,
-            "emotional_support_style": "validating",  # validating, problem_solving, balanced
+            "emotional_support_style": "validating",
             "response_length_preference": "medium",
         }
         self.interaction_patterns: Dict[str, int] = defaultdict(int)
@@ -2055,7 +2244,6 @@ class PersonalizationEngine:
     ):
         """Update preferences based on interaction patterns"""
         
-        # Track message length preferences
         msg_length = len(user_message)
         if msg_length < 50:
             self.interaction_patterns["brief_messages"] += 1
@@ -2064,11 +2252,9 @@ class PersonalizationEngine:
         else:
             self.interaction_patterns["medium_messages"] += 1
         
-        # Track emotional sharing patterns
         if intent.get("primary_intent") == "deep_sharing":
             self.interaction_patterns["deep_sharing"] += 1
         
-        # Track question asking
         if "?" in user_message:
             self.interaction_patterns["asks_questions"] += 1
         
@@ -2079,9 +2265,8 @@ class PersonalizationEngine:
         
         total_interactions = sum(self.interaction_patterns.values())
         if total_interactions < 5:
-            return ""  # Not enough data yet
+            return ""
         
-        # Analyze patterns
         brief_ratio = self.interaction_patterns["brief_messages"] / total_interactions
         detailed_ratio = self.interaction_patterns["detailed_messages"] / total_interactions
         
@@ -2131,9 +2316,8 @@ class PerformanceMonitor:
         self.errors: List[str] = []
         self.daily_cost = 0.0
         
-        # Approximate token costs (update with actual pricing)
         self.token_costs = {
-            "gpt-4o": 0.000005,  # per token
+            "gpt-4o": 0.000005,
             "gpt-4o-mini": 0.00000015,
         }
     
