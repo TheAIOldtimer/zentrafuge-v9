@@ -24,7 +24,7 @@ from firebase_admin import auth, credentials, firestore
 from openai import OpenAI  # OpenAI SDK v1.3.0 style
 
 # Import memory and orchestration modules
-from orchestrator import CaelOrchestrator, EmotionalSafetyMonitor
+from orchestrator import CaelOrchestrator
 
 # Import encryption utilities
 from crypto_handler import encrypt_text, decrypt_text
