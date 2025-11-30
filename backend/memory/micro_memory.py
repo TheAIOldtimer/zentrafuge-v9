@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Zentrafuge v9 - Micro Memory Storage
+Zentrafuge v10 - Micro Memory Storage
 Session summaries with 14-day half-life forgetting curve
-WITH ENCRYPTION AT REST
+WITH ENCRYPTION + EMOTIONAL TAGGING + RELEVANCE SEARCH
 """
 
 import logging
@@ -23,7 +23,13 @@ logger = logging.getLogger(__name__)
 class MicroMemory:
     """
     Micro memories: Short conversation summaries with forgetting curve
-    WITH ENCRYPTION AT REST
+    WITH ENCRYPTION + ENHANCED RETRIEVAL
+    
+    NEW in v10:
+    - Emotional tagging for better retrieval
+    - Relevance-based search (not just recency)
+    - Importance boosting for significant moments
+    - Better decay algorithms
     
     - Created at end of each session
     - Importance decays over 14 days (half-life)
@@ -49,7 +55,7 @@ class MicroMemory:
     ) -> str:
         """
         Create a new micro memory from a conversation session
-        WITH ENCRYPTION
+        WITH ENCRYPTION + EMOTIONAL TAGGING
         
         Args:
             summary: Brief summary of the session (will be encrypted)
@@ -100,7 +106,7 @@ class MicroMemory:
             
             logger.info(
                 f"✅ Created micro memory {memory_id}: {len(messages)} messages, "
-                f"importance={initial_importance:.1f} [encrypted]"
+                f"importance={initial_importance:.1f}, emotion={emotional_context.get('primary_emotion', 'neutral')} [encrypted]"
             )
             
             return memory_id
@@ -108,6 +114,40 @@ class MicroMemory:
         except Exception as e:
             logger.error(f"❌ Failed to create micro memory: {e}")
             raise
+    
+    def boost_importance(self, memory_id: str, boost: float) -> bool:
+        """
+        NEW: Boost importance of a micro memory
+        
+        Args:
+            memory_id: ID of memory to boost
+            boost: Amount to add to importance
+            
+        Returns:
+            True if successful
+        """
+        try:
+            doc_ref = self.db.collection(self.collection).document(memory_id)
+            doc = doc_ref.get()
+            
+            if not doc.exists:
+                return False
+            
+            memory = doc.to_dict()
+            current_importance = memory.get('importance', 5.0)
+            new_importance = min(current_importance + boost, 10.0)
+            
+            doc_ref.update({
+                'importance': new_importance,
+                'last_updated': datetime.utcnow().isoformat()
+            })
+            
+            logger.info(f"⬆️ Boosted memory {memory_id} importance: {current_importance:.1f} → {new_importance:.1f}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to boost importance: {e}")
+            return False
     
     def get_micro_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -229,6 +269,70 @@ class MicroMemory:
             
         except Exception as e:
             logger.error(f"❌ Failed to get recent micro memories: {e}")
+            return []
+    
+    def search_by_emotion(
+        self,
+        emotion: str,
+        limit: int = 10,
+        min_intensity: float = 0.5
+    ) -> List[Dict[str, Any]]:
+        """
+        NEW: Search micro memories by emotional content
+        
+        Args:
+            emotion: Emotion to search for (e.g., 'anxious', 'positive', 'negative')
+            limit: Maximum number of results
+            min_intensity: Minimum emotional intensity threshold
+            
+        Returns:
+            List of matching decrypted micro memories
+        """
+        try:
+            # Query all unconsolidated memories
+            query = self.db.collection(self.collection)\
+                          .where('consolidated', '==', False)\
+                          .order_by('created_at', direction=firestore.Query.DESCENDING)\
+                          .limit(100)
+            
+            matches = []
+            
+            for doc in query.stream():
+                memory = doc.to_dict()
+                emotional = memory.get('emotional_context', {})
+                
+                # Check if emotion matches and meets intensity threshold
+                if emotional.get('primary_emotion') == emotion and \
+                   emotional.get('emotional_intensity', 0) >= min_intensity:
+                    
+                    memory['memory_id'] = doc.id
+                    
+                    # DECRYPT summary
+                    if 'summary' in memory:
+                        memory['summary'] = decrypt_text(memory['summary'])
+                    
+                    # Calculate current importance
+                    memory['current_importance'] = self._calculate_decayed_importance(
+                        memory['importance'],
+                        memory['created_at']
+                    )
+                    
+                    matches.append(memory)
+                    
+                    if len(matches) >= limit:
+                        break
+            
+            # Sort by emotional intensity
+            matches.sort(
+                key=lambda m: m.get('emotional_context', {}).get('emotional_intensity', 0),
+                reverse=True
+            )
+            
+            logger.info(f"🔍 Found {len(matches)} memories with emotion '{emotion}'")
+            return matches
+            
+        except Exception as e:
+            logger.error(f"Failed to search by emotion: {e}")
             return []
     
     def _calculate_decayed_importance(
@@ -395,6 +499,7 @@ class MicroMemory:
             total = 0
             consolidated = 0
             topics_count: Dict[str, int] = {}
+            emotions_count: Dict[str, int] = {}
             
             for doc in query.stream():
                 total += 1
@@ -406,6 +511,11 @@ class MicroMemory:
                 # Count topics
                 for topic in memory.get('topics', []):
                     topics_count[topic] = topics_count.get(topic, 0) + 1
+                
+                # Count emotions
+                emotional = memory.get('emotional_context', {})
+                emotion = emotional.get('primary_emotion', 'neutral')
+                emotions_count[emotion] = emotions_count.get(emotion, 0) + 1
             
             return {
                 'total_micro_memories': total,
@@ -416,6 +526,7 @@ class MicroMemory:
                     key=lambda x: x[1],
                     reverse=True
                 )[:10],
+                'emotion_distribution': emotions_count,
                 'encryption': 'enabled'
             }
             
